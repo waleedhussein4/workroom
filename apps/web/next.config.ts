@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
@@ -12,4 +13,22 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
 }
 
-export default nextConfig
+/**
+ * Sentry wraps the config only when a DSN is present.
+ *
+ * Otherwise a fresh clone and every CI build would attempt source map upload
+ * against a project that does not exist, and fail or warn for no reason.
+ */
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      // Quiet locally, verbose in CI where the output is the only record.
+      silent: !process.env.CI,
+      // Routes Sentry's own requests through this origin, so an ad blocker
+      // does not quietly discard the reports that matter most.
+      tunnelRoute: '/monitoring',
+      widenClientFileUpload: true,
+      disableLogger: true,
+    })
+  : nextConfig

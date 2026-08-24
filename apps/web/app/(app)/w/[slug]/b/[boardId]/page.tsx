@@ -80,8 +80,8 @@ export default async function BoardPage({ params }: { params: Promise<{ boardId:
   }
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
-      <div className="flex items-center justify-between px-6 py-4">
+    <div className="flex min-h-[60dvh] flex-col sm:h-[calc(100dvh-3.5rem)]">
+      <div className="flex items-center justify-between px-4 py-4 sm:px-6">
         <h1 className="text-foreground text-lg font-semibold tracking-tight">
           {context.boardName}
         </h1>
