@@ -49,10 +49,13 @@ export function WorkspaceNav({
   ]
 
   return (
-    <header className="border-border/70 border-b">
-      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-6">
+    <header className="border-border/70 border-b max-sm:h-auto">
+      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:h-14 sm:flex-nowrap sm:py-0 sm:px-6">
         <div className="flex items-center gap-2">
-          <Link href="/workspaces" className="text-foreground text-sm font-semibold tracking-tight">
+          <Link
+            href="/workspaces"
+            className="text-foreground shrink-0 text-sm font-semibold tracking-tight"
+          >
             Workroom
           </Link>
           <span className="text-border" aria-hidden>
@@ -93,7 +96,10 @@ export function WorkspaceNav({
           </DropdownMenu>
         </div>
 
-        <nav className="hidden items-center gap-1 sm:flex" aria-label="Workspace sections">
+        <nav
+          className="order-3 flex w-full items-center gap-1 overflow-x-auto pb-2 sm:order-none sm:w-auto sm:pb-0"
+          aria-label="Workspace sections"
+        >
           {tabs.map((tab) => {
             const active = tab.match(pathname)
             return (

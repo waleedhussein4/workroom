@@ -46,7 +46,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ docId
   const canEdit = can(context.role, 'doc:update')
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+    <div className="flex min-h-[60dvh] flex-col sm:h-[calc(100dvh-3.5rem)]">
       <DocHeader
         documentId={docId}
         title={context.title}

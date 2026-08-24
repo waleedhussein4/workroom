@@ -213,7 +213,7 @@ export function BoardView({
           }
         }}
       >
-        <div className="flex h-full items-start gap-3 overflow-x-auto px-6 pb-6">
+        <div className="flex h-full items-start gap-3 overflow-x-auto px-4 pb-6 sm:px-6">
           {columns.map((column, index) => (
             <BoardColumn
               key={column.id}
@@ -264,7 +264,7 @@ function BoardPresenceBar({
 }) {
   return (
     <div
-      className="flex h-8 items-center gap-3 px-6"
+      className="flex h-8 items-center gap-3 px-4 sm:px-6"
       data-testid="board-presence"
       data-connected={connected ? 'true' : 'false'}
       data-peers={peers.length}
@@ -320,7 +320,7 @@ function AddColumn({ boardId }: { boardId: string }) {
   return (
     <Button
       variant="ghost"
-      className="text-muted-foreground hover:text-foreground h-9 w-56 shrink-0 justify-start"
+      className="text-muted-foreground hover:text-foreground h-9 w-44 shrink-0 justify-start sm:w-56"
       disabled={pending}
       onClick={async () => {
         setPending(true)

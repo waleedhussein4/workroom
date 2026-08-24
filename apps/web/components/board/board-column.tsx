@@ -54,7 +54,7 @@ export function BoardColumn({
 
   return (
     <section
-      className="bg-muted/40 flex w-72 shrink-0 flex-col rounded-xl"
+      className="bg-muted/40 flex w-[85vw] max-w-72 shrink-0 flex-col rounded-xl sm:w-72"
       aria-label={column.name}
     >
       <header className="flex items-center gap-2 px-3 pt-3 pb-2">
