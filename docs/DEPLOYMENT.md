@@ -45,14 +45,21 @@ Fly.io, around $3/month for a shared-cpu-1x with 256 MB. That is plenty: Yjs upd
 
 `fly launch` cannot auto-detect anything here, because the repository is an npm workspace and the server is one package inside it. There is no runtime to infer at the root. The Dockerfile and `fly.toml` are committed, so skip `launch` and deploy directly.
 
-Set the secrets first:
+Set the secrets first, either from the app's Secrets tab in the Fly dashboard, or with the CLI.
+
+On macOS and Linux:
 
 ```bash
-fly secrets set \
-  DATABASE_URL='postgresql://...' \
-  REALTIME_JWT_SECRET='...' \
-  SYNC_INTERNAL_SECRET='...'
+fly secrets set   DATABASE_URL='postgresql://...'   REALTIME_JWT_SECRET='...'   SYNC_INTERNAL_SECRET='...'
 ```
+
+On Windows, PowerShell does not treat a backslash as a line continuation, so keep it on one line and quote each pair:
+
+```powershell
+fly secrets set "DATABASE_URL=postgresql://..." "REALTIME_JWT_SECRET=..." "SYNC_INTERNAL_SECRET=..." --app workroom
+```
+
+`fly auth login` needs a real terminal and will not run from a script or a CI step. If you cannot use it, the dashboard does the same job, or `fly tokens create` produces a `FLY_API_TOKEN` that works headlessly.
 
 `PORT` is already set in `fly.toml` and does not belong in secrets.
 
@@ -104,9 +111,9 @@ NEXT_PUBLIC_SENTRY_DSN
 
 Two things that bite:
 
-**`NEXT_PUBLIC_SYNC_URL` is inlined at build time**, not read at runtime. Changing it needs a redeploy, not just an environment edit.
+`NEXT_PUBLIC_SYNC_URL` **is inlined at build time**, not read at runtime. Changing it needs a redeploy, not just an environment edit.
 
-**`BETTER_AUTH_URL` is a chicken and egg.** You do not know the project URL until the first deploy finishes. Deploy once, copy the URL, set the variable, redeploy. Sign-in fails with an origin mismatch until it is right.
+`BETTER_AUTH_URL` **is a chicken and egg.** You do not know the project URL until the first deploy finishes. Deploy once, copy the URL, set the variable, redeploy. Sign-in fails with an origin mismatch until it is right.
 
 ## 5. Continuous deployment
 
@@ -127,7 +134,7 @@ If you would rather let Vercel's own Git integration handle deploys, leave `DEPL
 
 ## 6. GitHub sign-in
 
-Create an OAuth app at <https://github.com/settings/developers>:
+Create an OAuth app at [https://github.com/settings/developers](https://github.com/settings/developers):
 
 - Homepage: `https://<project>.vercel.app`
 - Callback: `https://<project>.vercel.app/api/auth/callback/github`
@@ -159,4 +166,4 @@ Then open the app in two browser windows: drag a card in one and watch it move i
 
 **Edits save but the other window never updates.** `SYNC_INTERNAL_URL` or `SYNC_INTERNAL_SECRET` is wrong. Publishing is deliberately fire-and-forget so a sync outage cannot fail a write that already committed, which means this fails quietly. The web app logs a warning.
 
-**`fly deploy` cannot find a Dockerfile.** You are running it from `apps/sync`. Run it from the repository root.
+`fly deploy` **cannot find a Dockerfile.** You are running it from `apps/sync`. Run it from the repository root.
