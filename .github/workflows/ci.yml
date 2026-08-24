@@ -66,6 +66,39 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: workroom
+          # Not "C". The position columns override the collation per column,
+          # and a database that was already byte-ordered would let that
+          # override be deleted without any test noticing.
+          POSTGRES_INITDB_ARGS: '--locale=en_US.UTF-8'
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/workroom
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run test:integration
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -129,8 +162,8 @@ jobs:
 
   # --- Continuous deployment -------------------------------------------------
   # Both jobs are gated on the DEPLOY_ENABLED repository variable so they skip
-  # cleanly (rather than failing red) until apps/web exists and the Vercel
-  # secrets are set. To turn deployment on:
+  # cleanly rather than failing red when the hosting secrets are absent, which
+  # is what a fork sees. To turn deployment on:
   #
   #   gh variable set DEPLOY_ENABLED --body true
   #   gh secret set VERCEL_TOKEN
@@ -155,7 +188,7 @@ jobs:
 
   deploy-sync:
     name: Deploy sync server
-    needs: [format, lint, typecheck, test, build, e2e]
+    needs: [format, lint, typecheck, test, integration, build, e2e]
     if: >-
       vars.DEPLOY_ENABLED == 'true' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -179,7 +212,7 @@ jobs:
 
   deploy-preview:
     name: Deploy preview
-    needs: [format, lint, typecheck, test, build, e2e]
+    needs: [format, lint, typecheck, test, integration, build, e2e]
     if: github.event_name == 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
@@ -201,7 +234,7 @@ jobs:
 
   deploy-production:
     name: Deploy production
-    needs: [format, lint, typecheck, test, build, e2e]
+    needs: [format, lint, typecheck, test, integration, build, e2e]
     # A manual run deploys too, otherwise workflow_dispatch cannot do the one
     # thing it was added for: redeploying when a secret changed and the
     # repository did not.
