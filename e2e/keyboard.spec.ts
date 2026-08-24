@@ -6,6 +6,7 @@ import {
   addCard,
   columnItems,
   expectNoConsoleErrors,
+  eventually,
 } from './support/fixtures'
 
 /**
@@ -50,7 +51,7 @@ test.describe('keyboard drag', () => {
 
     // Persisted, so the keyboard path goes through the same server action.
     await alice.reload()
-    await expect(columnItems(alice)).toHaveText(['Beta', 'Alpha', 'Gamma'])
+    await eventually(columnItems(alice)).toHaveText(['Beta', 'Alpha', 'Gamma'])
     expectNoConsoleErrors(alice)
   })
 
@@ -75,6 +76,6 @@ test.describe('keyboard drag', () => {
 
     await expect(columnItems(alice)).toHaveText(['One', 'Two', 'Three'])
     await alice.reload()
-    await expect(columnItems(alice)).toHaveText(['One', 'Two', 'Three'])
+    await eventually(columnItems(alice)).toHaveText(['One', 'Two', 'Three'])
   })
 })

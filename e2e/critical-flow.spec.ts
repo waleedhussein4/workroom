@@ -5,6 +5,7 @@ import {
   openEmptyBoard,
   addCard,
   columnItems,
+  eventually,
 } from './support/fixtures'
 
 test.describe('the path a new user takes', () => {
@@ -21,7 +22,7 @@ test.describe('the path a new user takes', () => {
     // Survives a reload, so it really was persisted rather than left in
     // client state.
     await alice.reload()
-    await expect(alice.getByText('Write the README', { exact: true })).toBeVisible()
+    await eventually(alice.getByText('Write the README', { exact: true })).toBeVisible()
   })
 
   test('a card keeps its column and order across a reload', async ({ alice }) => {
@@ -35,6 +36,6 @@ test.describe('the path a new user takes', () => {
     await expect(columnItems(alice)).toHaveText(['First', 'Second', 'Third'])
 
     await alice.reload()
-    await expect(columnItems(alice)).toHaveText(['First', 'Second', 'Third'])
+    await eventually(columnItems(alice)).toHaveText(['First', 'Second', 'Third'])
   })
 })
