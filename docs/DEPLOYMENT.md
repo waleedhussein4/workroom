@@ -41,20 +41,20 @@ up. Fix it either way before sharing the URL:
 The second is reasonable for a demo anyone should be able to try in a few
 seconds. The first is what a real product does.
 
-**Deploys are currently not gated on tests.** Vercel's own Git integration is
-connected and deploys on every push to `main`, while the Actions deploy jobs
-stay skipped because `DEPLOY_ENABLED` is unset. That works, but it means a red
-test suite still ships. Section 5 covers the choice.
+**Deploys are gated on the tests.** A push to `main` runs format, lint,
+typecheck, unit tests, build and end to end, and only ships if all six pass.
+One pipeline covers both services: Vercel for the web app, Fly for the sync
+server. Verified working on run `32752039512`.
 
 Section by section:
 
 | Section                  | State                                    |
 | ------------------------ | ---------------------------------------- |
 | 1. Database              | done, migrated to `0001`                 |
-| 2. Secrets               | done, all three set on both services     |
-| 3. Sync server           | done, live, scaled to one machine        |
-| 4. Web app               | done, live, all seven variables set      |
-| 5. Continuous deployment | working, but ungated. Decision open      |
+| 2. Secrets               | done on both services and in CI          |
+| 3. Sync server           | done, live, one machine, deploys from CI |
+| 4. Web app               | done, live, seven vars, deploys from CI  |
+| 5. Continuous deployment | done, gated on six checks, both services |
 | 6. GitHub sign-in        | not done. Button hidden until configured |
 | 7. Monitoring            | not done                                 |
 
@@ -95,9 +95,9 @@ openssl rand -base64 32   # SYNC_INTERNAL_SECRET
 ## 3. Sync server — done
 
 Live at <https://workroom.fly.dev>, one `shared-cpu-1x` machine in `ams`, health
-check green. Secrets are set. Redeploy with `fly deploy --ha=false` from the
-repository root after any change to `apps/sync`, `packages/db` or
-`packages/core`.
+check green. Secrets are set, and it now redeploys from CI on every push to
+`main`, so the manual `fly deploy` below is only needed to bootstrap a new app
+or to recover when CI cannot.
 
 Fly.io, around $3/month for a shared-cpu-1x with 256 MB. That is plenty: Yjs update messages are often under 50 bytes, and twenty people typing in one document is a few hundred kilobytes a minute.
 
@@ -146,8 +146,8 @@ Write that hostname down. The web app needs it twice, as `https://` for server-t
 ## 4. Web app — done
 
 Live at <https://workroom-web.vercel.app>, project `workroom-web`, root directory
-`apps/web`, all seven environment variables set. Redeploys automatically on push
-to `main`.
+`apps/web`, all seven environment variables set and marked Sensitive. Redeploys
+from CI on every push to `main`; its own Git integration is disconnected.
 
 Import the repository on Vercel and set **Root Directory** to `apps/web`. Leave "Include source files outside of the Root Directory" enabled, or the workspace packages will not resolve. Vercel detects Next.js and npm workspaces on its own; the build and install commands need no changes.
 
@@ -181,33 +181,67 @@ Two things that bite:
 
 `BETTER_AUTH_URL` **is a chicken and egg.** You do not know the project URL until the first deploy finishes. Deploy once, copy the URL, set the variable, redeploy. Sign-in fails with an origin mismatch until it is right.
 
-## 5. Continuous deployment — working, but ungated
+## 5. Continuous deployment — done
 
-Deploys happen. They are simply not conditional on the tests passing. This is a
-decision to make rather than a task to complete.
+A push to `main` runs format, lint, typecheck, unit tests, build and end to
+end. Only if all six pass does anything ship, and then both services ship from
+the same run: `deploy-production` to Vercel and `deploy-sync` to Fly. Pull
+requests get a preview deploy. `workflow_dispatch` allows a manual re-run,
+which matters when the thing that changed was a secret rather than the code.
 
-There are two ways to deploy and **only one should be on at a time**.
-
-Right now Vercel's Git integration is connected, so every push to `main` ships
-regardless of whether the tests passed. That is the simpler setup and it is
-working, but it gives up the thing the Actions jobs exist for.
-
-The deploy jobs in `.github/workflows/ci.yml` are gated on format, lint,
-typecheck, unit tests, build and end-to-end all passing. To switch to them,
-disconnect the Vercel Git integration first, or the same commit deploys twice.
-
-They stay skipped until a repository variable turns them on:
+Configured with:
 
 ```bash
-gh secret set VERCEL_TOKEN          # vercel.com/account/tokens
-gh secret set VERCEL_ORG_ID         # from .vercel/project.json after `vercel link`
+gh secret set VERCEL_TOKEN          # account-scoped, see below
+gh secret set VERCEL_ORG_ID
 gh secret set VERCEL_PROJECT_ID
+gh secret set FLY_API_TOKEN         # flyctl tokens create deploy --app <app>
 gh variable set DEPLOY_ENABLED --body true
 ```
 
-Push to `main` deploys production; a pull request gets a preview.
+Unsetting `DEPLOY_ENABLED` turns every deploy job off without deleting
+anything, which is the quickest way to stop shipping if something is wrong.
 
-Leaving `DEPLOY_ENABLED` unset keeps the current arrangement.
+### The dashboards must be disconnected
+
+Vercel and Fly both offer their own Git integrations, and either one running
+alongside these jobs deploys the same commit twice. Worse, their deploys are
+not gated on anything, so the guarantee this whole arrangement exists for is
+only as good as the weakest path.
+
+- **Vercel**: Project, Settings, Git, Disconnect. Done.
+- **Fly**: no `flyctl` command exists for this. The reliable route is the
+  GitHub side: <https://github.com/settings/installations>, Fly.io, Configure,
+  then either remove this repository or uninstall.
+
+Verify with `flyctl releases --app <app>`: one new release per push, not two.
+
+### Two things that cost an afternoon
+
+**The Vercel token must be account-scoped, not project-scoped.** A
+project-scoped token reads the project and its environment variables perfectly
+well, but returns 403 on the team endpoint and 404 on the user endpoint, so the
+CLI cannot work out which account owns the project. It fails with
+`Could not retrieve Project Settings`, which reads like a wrong project id.
+
+**Deploys upload source and let Vercel build.** The obvious arrangement, `pull`
+then `build` then `deploy --prebuilt`, does not work here, because the
+project's environment variables are marked Sensitive. `vercel pull` returns the
+literal string `[SENSITIVE]` for those rather than their values, and the build
+then fails during prerender on `new URL("[SENSITIVE]")`, which looks like an
+application bug rather than a configuration one.
+
+Building on Vercel is the better arrangement anyway: the runner never handles
+production secrets, and marking a variable Sensitive keeps meaning what it
+says. The cost is that the build runs twice, once in the `build` job to catch
+errors early and once on Vercel to produce the artifact that ships.
+
+**The Fly deploy passes `--ha=false`.** Without it flyctl adds a second
+machine, and two instances hold separate copies of every document with nothing
+shared between them, so two people editing the same document can land on
+different machines and never see each other. The job also takes a concurrency
+lock, since a deploy replaces the machine holding every open WebSocket and two
+overlapping deploys would disconnect everyone twice.
 
 ## 6. GitHub sign-in — not done
 
