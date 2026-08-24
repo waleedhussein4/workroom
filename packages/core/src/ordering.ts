@@ -4,7 +4,7 @@
  * Board order is stored in Postgres as an opaque, lexicographically-sortable
  * string per row (a "fractional index"). Moving a card writes exactly one row,
  * which is the smallest possible surface for two concurrent writers to collide
- * on. See docs/SPEC.md section 6 for the full rationale.
+ * on. The "Ordering" section of docs/SPEC.md has the full rationale.
  *
  * Three layers defend the ordering guarantee. All three are required:
  *

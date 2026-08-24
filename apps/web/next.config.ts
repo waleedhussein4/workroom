@@ -2,12 +2,12 @@ import { withSentryConfig } from '@sentry/nextjs'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // Next writes AGENTS.md and CLAUDE.md into the project on `next dev`
-  // otherwise. They are editor tooling, not part of the application.
+  // Next scaffolds editor rule files into the project on `next dev` unless
+  // this is off. They are local tooling, not part of the application.
   agentRules: false,
 
-  // Reached from the sync server and the browser, so it has to be a real
-  // origin rather than a rewrite.
+  // The workspace packages ship TypeScript rather than a build output, so
+  // Next has to compile them alongside the app.
   transpilePackages: ['@workroom/core', '@workroom/db'],
 
   typedRoutes: true,

@@ -14,8 +14,15 @@
  *   npm run dev:web        # and dev:sync, both running
  *   node scripts/demo/record.mjs [--url http://localhost:3000] [--out docs]
  *
- * Produces a .webm. Converting it to a GIF needs ffmpeg:
- *   ffmpeg -i docs/demo.webm -vf "fps=12,scale=960:-1:flags=lanczos" docs/demo.gif
+ * Produces a .webm. Converting it to the committed GIF needs ffmpeg. The
+ * exact command, because the details matter more than they look:
+ *
+ *   ffmpeg -ss 0.95 -i docs/demo.webm -filter_complex  *     "fps=11,scale=940:-1:flags=lanczos,split[s0][s1]; *      [s0]palettegen=max_colors=200:stats_mode=diff[p]; *      [s1][p]paletteuse=dither=none" -loop 0 docs/demo.gif
+ *
+ * The seek drops the first second, which is both panes loading. Without it the
+ * README opens on a blank white rectangle, since a still GIF shows frame one.
+ * Dithering is off because the UI is flat colour, where it only adds visible
+ * noise and bytes.
  */
 
 import { chromium } from '@playwright/test'

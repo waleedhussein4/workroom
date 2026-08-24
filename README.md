@@ -4,6 +4,12 @@
 
 A collaborative workspace for small teams. Kanban boards for planning, live documents for writing, and everything syncs in real time: cursors, presence, edits, comments.
 
+**[workroom-web.vercel.app](https://workroom-web.vercel.app)**
+
+![Two panes side by side showing the same board. A card dragged in the left pane moves in the right one, then both panes type into the same paragraph of a document and the characters interleave.](docs/demo.gif)
+
+Two panes, two independent WebSocket connections, one board. The card moves in the pane that did not drag it, and when both start typing into the same paragraph neither side's keystrokes are lost. Recorded by `npm run demo`, which drives the real application rather than a mockup.
+
 ## How it syncs
 
 Boards and documents get different conflict-resolution strategies, because using one mechanism for both would be a bug rather than a preference.
@@ -25,12 +31,16 @@ Concurrent editing is easy to claim and easy to get subtly wrong, so each claim 
 
 **Duplicate order keys are harmless.** Key generation is deterministic, so two clients looking at the same gap compute the same key. A unit test proves that case converges, and a second test asserts it _stops_ converging when the `id` tiebreak is removed, so the reason that tiebreak exists survives future refactors.
 
-**Byte order, not locale order.** Order keys compare byte by byte. The local development database is deliberately created with a locale collation so the per-column `COLLATE "C"` is exercised rather than accidentally correct:
+**Two transactions racing for the same gap do not deadlock.** Pure functions say nothing about row locking, so this one runs against a real Postgres. Two transactions are opened and confirmed live before either takes a lock, both move a card into the same gap, and the test asserts that both commit, that the neighbours do not move, and that no two rows tie on `(position, id)`.
+
+**Byte order, not locale order.** Order keys compare byte by byte, which is why the position columns are `text COLLATE "C"`. The databases used for testing are deliberately created with a locale collation, so the per-column override is exercised rather than accidentally correct:
 
 ```
 byte order  (COLLATE "C"):  A0 < Zz < a0 < a0V < z0
 locale order (db default):  a0 < A0 < a0V < z0 < Zz
 ```
+
+Removing the override turns the first line into the second, and an integration test fails.
 
 **Twenty people editing at once stay in sync.** `npm run loadtest -- --doc <id>` drives N clients against one document and measures the delay from an edit being written to it being seen by everyone else. Both ends run in one process, so the figure is genuinely end to end:
 
@@ -75,7 +85,7 @@ apps/sync       Hocuspocus WebSocket server
 packages/core   Ordering and permissions. No framework, no I/O.
 packages/db     Drizzle schema and migrations
 e2e             Playwright specs
-scripts         Realtime probes
+scripts         Load harness, realtime probes, demo recorder
 docs/SPEC.md    Architecture and product notes
 ```
 
@@ -96,10 +106,11 @@ npm run dev:sync                  # ws://localhost:1234
 
 Without a sync server the app still works: boards fall back to ordinary navigation and documents open read-only-ish, with the board showing "Offline" instead of "Live".
 
-Email has no provider by default. Confirmation and invitation links are printed to the server console, so both flows can be exercised locally without signing up for anything, and email confirmation is skipped so sign-up still completes. Setting `RESEND_API_KEY` and `EMAIL_FROM` sends the messages and turns confirmation on.
+Email has no provider by default. Confirmation and invitation links are printed to the server console, so both flows can be exercised locally without signing up for anything, and confirmation is skipped so sign-up still completes. Setting `RESEND_API_KEY` and `EMAIL_FROM` sends the messages and turns confirmation on.
 
 ```bash
-npm test                          # unit tests
+npm test                          # unit tests, no infrastructure needed
+npm run test:integration          # needs DATABASE_URL, skips without it
 npm run test:e2e                  # playwright, starts its own servers
 npm run lint
 npm run typecheck
@@ -109,10 +120,12 @@ npm run loadtest -- --doc <id>    # N concurrent editors, needs the sync server
 npm run demo                      # re-record docs/demo.gif
 ```
 
+CI runs all of those as separate jobs, and nothing deploys unless all seven pass.
+
 ## Deploying
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
