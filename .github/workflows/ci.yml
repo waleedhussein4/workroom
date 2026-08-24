@@ -63,6 +63,18 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @workroom/web
+
   # --- Continuous deployment -------------------------------------------------
   # Both jobs are gated on the DEPLOY_ENABLED repository variable so they skip
   # cleanly (rather than failing red) until apps/web exists and the Vercel
@@ -78,7 +90,7 @@ jobs:
 
   deploy-preview:
     name: Deploy preview
-    needs: [format, lint, typecheck, test]
+    needs: [format, lint, typecheck, test, build]
     if: github.event_name == 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
@@ -110,7 +122,7 @@ jobs:
 
   deploy-production:
     name: Deploy production
-    needs: [format, lint, typecheck, test]
+    needs: [format, lint, typecheck, test, build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
