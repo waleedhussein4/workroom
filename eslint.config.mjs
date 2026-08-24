@@ -2,6 +2,7 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
 import nextPlugin from '@next/eslint-plugin-next'
+import globals from 'globals'
 import prettier from 'eslint-config-prettier'
 
 export default tseslint.config(
@@ -39,6 +40,11 @@ export default tseslint.config(
       // App Router only, so there is no pages directory for this rule to scan.
       '@next/next/no-html-link-for-pages': 'off',
     },
+  },
+  // Standalone Node scripts and the sync server run outside a bundler.
+  {
+    files: ['scripts/**/*.{js,mjs}', 'apps/sync/**/*.ts'],
+    languageOptions: { globals: { ...globals.node } },
   },
   prettier,
 )

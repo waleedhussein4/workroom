@@ -1,0 +1,23 @@
+{
+  "name": "@workroom/sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hocuspocus WebSocket server: document sync, presence, and board event fan-out.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-database": "4.6.0",
+    "@hocuspocus/server": "4.6.0",
+    "@workroom/db": "*",
+    "jose": "^6.1.0",
+    "yjs": "13.6.32"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6"
+  }
+}

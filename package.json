@@ -18,7 +18,12 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "probe:realtime": "node scripts/probe-realtime-auth.mjs",
+    "dev:sync": "npm run dev --workspace @workroom/sync",
+    "dev:web": "npm run dev --workspace @workroom/web",
+    "db:generate": "npm run generate --workspace @workroom/db",
+    "db:migrate": "npm run migrate --workspace @workroom/db"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -27,6 +32,7 @@
     "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.67.0",

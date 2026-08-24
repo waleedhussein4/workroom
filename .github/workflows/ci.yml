@@ -74,6 +74,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build --workspace @workroom/web
+      - run: npm run typecheck --workspace @workroom/sync
 
   # --- Continuous deployment -------------------------------------------------
   # Both jobs are gated on the DEPLOY_ENABLED repository variable so they skip
