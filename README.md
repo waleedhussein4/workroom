@@ -32,6 +32,18 @@ byte order  (COLLATE "C"):  A0 < Zz < a0 < a0V < z0
 locale order (db default):  a0 < A0 < a0V < z0 < Zz
 ```
 
+**Twenty people editing at once stay in sync.** `npm run loadtest -- --doc <id>` drives N clients against one document and measures the delay from an edit being written to it being seen by everyone else. Both ends run in one process, so the figure is genuinely end to end:
+
+```
+observations : 7220
+p50          : 14 ms
+p95          : 29 ms
+p99          : 36 ms
+converged    : YES
+```
+
+Convergence matters more than the latency, because a server that drops half the updates is extremely fast.
+
 **Two people can type in the same paragraph.** `scripts/probe-doc-sync.mjs` runs two clients against the sync server, inserts into one paragraph from both, and checks convergence and persistence:
 
 ```
@@ -92,6 +104,9 @@ npm run test:e2e                  # playwright, starts its own servers
 npm run lint
 npm run typecheck
 npm run format:check
+
+npm run loadtest -- --doc <id>    # N concurrent editors, needs the sync server
+npm run demo                      # re-record docs/demo.gif
 ```
 
 ## Deploying

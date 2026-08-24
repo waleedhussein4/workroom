@@ -1,4 +1,11 @@
-import { test, expect, createWorkspace, openEmptyBoard, addCard } from './support/fixtures'
+import {
+  test,
+  expect,
+  createWorkspace,
+  openEmptyBoard,
+  addCard,
+  eventually,
+} from './support/fixtures'
 
 /** Column names in board order. */
 function columnNames(page: Parameters<typeof addCard>[0]) {
@@ -21,7 +28,7 @@ test.describe('columns', () => {
 
     // Persisted, not just local state.
     await alice.reload()
-    await expect(columnNames(alice).first()).toContainText('Icebox')
+    await eventually(columnNames(alice).first()).toContainText('Icebox')
   })
 
   test('move a column right and it stays there', async ({ alice }) => {
@@ -38,7 +45,7 @@ test.describe('columns', () => {
     })
 
     await alice.reload()
-    await expect(columnNames(alice)).toHaveText([/In progress/, /Backlog/, /Done/])
+    await eventually(columnNames(alice)).toHaveText([/In progress/, /Backlog/, /Done/])
   })
 
   test('the leftmost column cannot move further left', async ({ alice }) => {

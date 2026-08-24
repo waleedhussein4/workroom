@@ -45,7 +45,7 @@ Section by section:
 | Section                  | State                                    |
 | ------------------------ | ---------------------------------------- |
 | 1. Database              | done, migrated to `0001`                 |
-| 2. Secrets               | done on both services and in CI          |
+| 2. Secrets               | done, rotated 2026-08-24                 |
 | 3. Sync server           | done, live, one machine, deploys from CI |
 | 4. Web app               | done, live, seven vars, deploys from CI  |
 | 5. Continuous deployment | done, gated on six checks, both services |
@@ -73,9 +73,16 @@ DATABASE_URL="postgresql://..." npm run db:migrate
 
 ## 2. Secrets — done
 
-All three are generated and set on both Fly and Vercel. They do want rotating at
-some point, since they passed through a chat transcript; the two realtime ones
-must be changed on both services together or live updates stop.
+All three are set on both Fly and Vercel, and were rotated on 2026-08-24 after
+the originals passed through a chat transcript.
+
+Rotating them again means changing both services in one go, because the two
+realtime secrets have to match or live updates stop with no visible error. The
+sequence that avoids a gap: update the Vercel variables, stage the Fly ones
+with `fly secrets set --stage`, then run the CI workflow manually, which
+deploys both from the same run. Verify afterwards with
+`node scripts/probe-realtime-auth.mjs`, which should authenticate on the new
+secret and reject the old one.
 
 Generate three:
 
