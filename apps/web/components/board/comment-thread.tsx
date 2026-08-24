@@ -19,19 +19,29 @@ export function CommentThread({ cardId, canComment }: { cardId: string; canComme
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
-  const load = useCallback(async () => {
-    const result = await listComments(cardId)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setError(null)
-    setComments(result.data)
-  }, [cardId])
+  // Bumped to force a reload after posting or deleting.
+  const [revision, setRevision] = useState(0)
+  const reload = useCallback(() => setRevision((value) => value + 1), [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    let cancelled = false
+
+    async function fetchComments() {
+      const result = await listComments(cardId)
+      if (cancelled) return
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setError(null)
+      setComments(result.data)
+    }
+
+    void fetchComments()
+    return () => {
+      cancelled = true
+    }
+  }, [cardId, revision])
 
   async function onPost(formData: FormData) {
     const body = String(formData.get('body') ?? '')
@@ -45,7 +55,7 @@ export function CommentThread({ cardId, canComment }: { cardId: string; canComme
       toast.error(result.error)
       return
     }
-    await load()
+    reload()
   }
 
   if (error) {
@@ -55,7 +65,7 @@ export function CommentThread({ cardId, canComment }: { cardId: string; canComme
         title="Could not load comments"
         description={error}
         action={
-          <Button size="sm" variant="outline" onClick={() => void load()}>
+          <Button size="sm" variant="outline" onClick={reload}>
             Try again
           </Button>
         }
@@ -104,7 +114,7 @@ export function CommentThread({ cardId, canComment }: { cardId: string; canComme
                       onClick={async () => {
                         const result = await deleteComment(item.id)
                         if (!result.ok) return toast.error(result.error)
-                        await load()
+                        reload()
                       }}
                     >
                       <Trash2 className="size-3" aria-hidden />
