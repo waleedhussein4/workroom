@@ -6,6 +6,7 @@ import { getDb, invitation, member, user } from '@workroom/db'
 import { NotFoundError, requireWorkspaceBySlug } from '@/server/guard'
 import { MembersTable } from '@/components/workspace/members-table'
 import { InviteForm } from '@/components/workspace/invite-form'
+import { PendingInvitations } from '@/components/workspace/pending-invitations'
 
 export const metadata: Metadata = { title: 'Members' }
 
@@ -79,23 +80,12 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
         }))}
       />
 
-      {pending.filter((row) => row.status === 'pending').length > 0 ? (
-        <div className="mt-10">
-          <h2 className="text-foreground text-sm font-medium">Pending invitations</h2>
-          <ul className="border-border mt-3 divide-y rounded-lg border">
-            {pending
-              .filter((row) => row.status === 'pending')
-              .map((row) => (
-                <li key={row.id} className="flex items-center justify-between px-4 py-3">
-                  <span className="text-foreground text-sm">{row.email}</span>
-                  <span className="text-muted-foreground text-xs capitalize">
-                    {row.role ?? 'member'}
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ) : null}
+      <PendingInvitations
+        organizationId={context.organizationId}
+        invitations={pending
+          .filter((row) => row.status === 'pending')
+          .map((row) => ({ id: row.id, email: row.email, role: row.role ?? 'member' }))}
+      />
     </div>
   )
 }

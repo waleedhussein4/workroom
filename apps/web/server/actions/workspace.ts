@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { and, eq } from 'drizzle-orm'
 import { canRemoveMember, canSetRole, isRole, keysBetween, type Role } from '@workroom/core'
-import { board, boardColumn, getDb, member, organization } from '@workroom/db'
+import { board, boardColumn, getDb, invitation, member, organization } from '@workroom/db'
 import { auth } from '@/server/auth'
 import { NotFoundError, requireUser, requireWorkspace, requireWorkspaceRole } from '@/server/guard'
 import { actionResult, type ActionResult } from './result'
@@ -116,6 +116,30 @@ export async function inviteMember(
       headers: await headers(),
     })
 
+    return null
+  })
+}
+
+export async function revokeInvitation(
+  organizationId: string,
+  invitationId: string,
+): Promise<ActionResult<null>> {
+  return actionResult(async () => {
+    const context = await requireWorkspaceRole(organizationId, 'member:invite')
+
+    const db = getDb()
+    const rows = await db
+      .select({ id: invitation.id })
+      .from(invitation)
+      .where(and(eq(invitation.id, invitationId), eq(invitation.organizationId, organizationId)))
+      .limit(1)
+
+    // Scoped to the workspace the caller has rights in, so an invitation id
+    // from elsewhere cannot be cancelled by guessing it.
+    if (!rows[0]) throw new NotFoundError('Invitation')
+
+    await db.delete(invitation).where(eq(invitation.id, invitationId))
+    revalidatePath(`/w/${context.slug}/members`)
     return null
   })
 }
