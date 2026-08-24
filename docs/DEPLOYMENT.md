@@ -33,13 +33,7 @@ the two-window convergence test.
 **One thing stops a stranger signing up.** Email verification is required and
 no mail provider is configured, so the confirmation link is written to the
 Vercel runtime log and nowhere else. Nobody outside the log can finish signing
-up. Fix it either way before sharing the URL:
-
-- set `RESEND_API_KEY` and `EMAIL_FROM`, which sends real mail; or
-- set `AUTH_REQUIRE_EMAIL_VERIFICATION=false`, which drops the step entirely.
-
-The second is reasonable for a demo anyone should be able to try in a few
-seconds. The first is what a real product does.
+up. Section 8 sets that up; it takes about five minutes and needs no domain.
 
 **Deploys are gated on the tests.** A push to `main` runs format, lint,
 typecheck, unit tests, build and end to end, and only ships if all six pass.
@@ -56,7 +50,8 @@ Section by section:
 | 4. Web app               | done, live, seven vars, deploys from CI  |
 | 5. Continuous deployment | done, gated on six checks, both services |
 | 6. GitHub sign-in        | not done. Button hidden until configured |
-| 7. Monitoring            | not done                                 |
+| 7. Monitoring            | done, off until a DSN is set             |
+| 8. Email                 | needs a Resend API key                   |
 
 ## 1. Database — done
 
@@ -255,12 +250,49 @@ Create an OAuth app at [https://github.com/settings/developers](https://github.c
 
 A second app pointed at `http://localhost:3000` is worth having for local work, since callback URLs cannot be wildcarded.
 
-## 7. Monitoring — not done
+## 7. Monitoring — done, off until a DSN is set
 
-No Sentry in the codebase. Errors currently go to the Vercel and Fly runtime
-logs and nowhere else, which means nobody finds out about them unless they look.
+Sentry is wired and stays entirely off unless `NEXT_PUBLIC_SENTRY_DSN` is
+present, so leaving it unconfigured is a supported state rather than a broken
+one. Setting the DSN on the Vercel project is all that is needed to turn it on.
 
-Sentry's free tier allows 5,000 errors a month. Filter WebSocket reconnect noise in `beforeSend` from the first deploy: a reconnect storm will otherwise consume a month's quota in an afternoon.
+`SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` are only needed to
+upload source maps. They make stack traces readable; reporting works without
+them.
+
+The free tier allows 5,000 errors a month, which a realtime app will otherwise
+spend on socket churn: connections drop on suspend, on a network change, and
+on every deploy that replaces the sync machine. `lib/sentry-filter.ts` drops
+that noise, along with aborted requests and Next's own thrown control flow,
+and has tests so the policy can be checked without a Sentry client.
+
+## 8. Email — needs an API key
+
+This is the one thing standing between the deployment and a URL a stranger can
+use. Verification is required, and without a provider the confirmation link
+reaches the server log and nothing else.
+
+Resend's free tier sends 3,000 messages a month and needs no domain to start:
+messages can go out from `onboarding@resend.dev`, which is enough for a demo
+and for testing the flow.
+
+1. Create an API key at <https://resend.com/api-keys>.
+2. Add two variables to the Vercel project and redeploy:
+
+```
+RESEND_API_KEY   re_...
+EMAIL_FROM       Workroom <onboarding@resend.dev>
+```
+
+Sending from `onboarding@resend.dev` only reaches the address that owns the
+Resend account until a domain is verified, which is fine for checking the flow
+and not fine for inviting anybody else. To send to arbitrary addresses, verify
+a domain at <https://resend.com/domains> and change `EMAIL_FROM` to use it.
+
+Without both variables the application still runs and still creates accounts;
+the message is written to the runtime log instead of being sent. Invitations
+can be worked around in that state, because the members page exposes a
+copyable invitation link, but nothing works around an unconfirmed address.
 
 ## Checks after deploying
 
