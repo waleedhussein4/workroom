@@ -10,6 +10,15 @@ import { githubCredentials, optional } from './env'
 const appUrl = optional('BETTER_AUTH_URL') ?? 'http://localhost:3000'
 const github = githubCredentials()
 
+/**
+ * Email confirmation is required by default and only turned off deliberately.
+ *
+ * The end-to-end suite sets this, because the alternative is scraping a link
+ * out of server logs in every sign-up test. It is opt-out rather than opt-in
+ * so that forgetting to set it in production fails safe.
+ */
+const requireEmailVerification = optional('AUTH_REQUIRE_EMAIL_VERIFICATION') !== 'false'
+
 export const auth = betterAuth({
   appName: 'Workroom',
   baseURL: appUrl,
@@ -22,10 +31,9 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    // Verification is required, but the email provider falls back to logging
-    // the link to the server console, so this still works locally with
-    // nothing configured.
-    requireEmailVerification: true,
+    // The email provider falls back to logging the link to the server
+    // console, so this works locally with nothing configured.
+    requireEmailVerification,
     async sendResetPassword({ user, url }) {
       await sendEmail({
         to: user.email,
@@ -36,7 +44,7 @@ export const auth = betterAuth({
   },
 
   emailVerification: {
-    sendOnSignUp: true,
+    sendOnSignUp: requireEmailVerification,
     autoSignInAfterVerification: true,
     async sendVerificationEmail({ user, url }) {
       await sendEmail({

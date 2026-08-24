@@ -76,6 +76,54 @@ jobs:
       - run: npm run build --workspace @workroom/web
       - run: npm run typecheck --workspace @workroom/sync
 
+  e2e:
+    name: End to end
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: workroom
+        ports:
+          - 5432:5432
+        # Without the health check the job races the container and the first
+        # migration fails on a refused connection.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/workroom
+      BETTER_AUTH_SECRET: ci-only-secret-long-enough-to-satisfy-entropy-checks
+      REALTIME_JWT_SECRET: ci-realtime-secret
+      SYNC_INTERNAL_SECRET: ci-internal-secret
+      SYNC_INTERNAL_URL: http://127.0.0.1:1234
+      NEXT_PUBLIC_SYNC_URL: ws://127.0.0.1:1234
+      BETTER_AUTH_URL: http://127.0.0.1:3100
+      AUTH_REQUIRE_EMAIL_VERIFICATION: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build --workspace @workroom/web
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   # --- Continuous deployment -------------------------------------------------
   # Both jobs are gated on the DEPLOY_ENABLED repository variable so they skip
   # cleanly (rather than failing red) until apps/web exists and the Vercel
@@ -91,7 +139,7 @@ jobs:
 
   deploy-preview:
     name: Deploy preview
-    needs: [format, lint, typecheck, test, build]
+    needs: [format, lint, typecheck, test, build, e2e]
     if: github.event_name == 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
@@ -123,7 +171,7 @@ jobs:
 
   deploy-production:
     name: Deploy production
-    needs: [format, lint, typecheck, test, build]
+    needs: [format, lint, typecheck, test, build, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:

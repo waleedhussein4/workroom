@@ -16,18 +16,21 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "probe:realtime": "node scripts/probe-realtime-auth.mjs",
     "dev:sync": "npm run dev --workspace @workroom/sync",
     "dev:web": "npm run dev --workspace @workroom/web",
     "db:generate": "npm run generate --workspace @workroom/db",
-    "db:migrate": "npm run migrate --workspace @workroom/db"
+    "db:migrate": "npm run migrate --workspace @workroom/db",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.3.2",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^24.10.1",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",

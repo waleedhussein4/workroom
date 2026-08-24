@@ -54,3 +54,6 @@ Thumbs.db
 
 # local planning notes, not part of the project
 .local/
+
+# playwright auth state
+e2e/.auth/

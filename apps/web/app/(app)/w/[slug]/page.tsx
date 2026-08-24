@@ -59,6 +59,7 @@ export default async function BoardsPage({ params }: { params: Promise<{ slug: s
             <li key={item.id}>
               <Link
                 href={{ pathname: `/w/${slug}/b/${item.id}` }}
+                data-testid="board-link"
                 className="border-border bg-card hover:border-border-strong flex h-24 flex-col justify-between rounded-xl border p-4 transition-colors duration-(--duration-micro)"
               >
                 <span className="text-foreground text-sm font-medium">{item.name}</span>

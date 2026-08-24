@@ -60,7 +60,11 @@ export function BoardColumn({
         </h2>
       </header>
 
-      <ul className="flex min-h-2 flex-col gap-2 px-3 pb-2" data-testid={`column-${column.id}`}>
+      <ul
+        className="flex min-h-2 flex-col gap-2 px-3 pb-2"
+        data-testid="column-cards"
+        data-column-id={column.id}
+      >
         {cards.map((card, index) => (
           <BoardCardTile
             key={card.id}

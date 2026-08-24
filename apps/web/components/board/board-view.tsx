@@ -10,6 +10,7 @@ import { BoardColumn } from '@/components/board/board-column'
 import { CardPanel } from '@/components/board/card-panel'
 import { Button } from '@/components/ui/button'
 import { moveCard } from '@/server/actions/board'
+import { cn } from '@/lib/utils'
 import { useBoardChannel } from '@/lib/use-board-channel'
 
 export interface BoardCard {
@@ -70,6 +71,22 @@ export function BoardView({
   const [openCardId, setOpenCardId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
+  /**
+   * Adopt fresh server data when it arrives.
+   *
+   * The board keeps cards in state so a drag can be applied optimistically,
+   * but that means a `router.refresh()` would otherwise re-render the server
+   * component and change nothing on screen. Adjusting state during render is
+   * React's documented way to reset on a prop change, and unlike an effect it
+   * does not paint the stale value first.
+   */
+  const [lastServerCards, setLastServerCards] = useState(initialCards)
+  if (lastServerCards !== initialCards) {
+    setLastServerCards(initialCards)
+    setCards(initialCards)
+    setLayout(toLayout(columns, initialCards))
+  }
+
   // While a drag is in flight, remote order changes for the affected board are
   // held rather than applied. Applying them mid-drag yanks the card out from
   // under the pointer. Everything else still lands immediately.
@@ -84,7 +101,7 @@ export function BoardView({
     router.refresh()
   }, [router])
 
-  const { presence } = useBoardChannel({
+  const { presence, connected } = useBoardChannel({
     boardId,
     user: currentUser,
     draggingCardId: draggingId,
@@ -146,6 +163,8 @@ export function BoardView({
 
   return (
     <>
+      <BoardPresenceBar connected={connected} peers={presence.peers} />
+
       <BoardDnd
         layout={layout}
         onLayoutChange={setLayout}
@@ -188,6 +207,61 @@ export function BoardView({
         />
       ) : null}
     </>
+  )
+}
+
+/**
+ * Who else is looking, and whether this board is receiving live updates.
+ *
+ * The `data-connected` attribute is not decoration: it is the only honest
+ * signal that this client has joined the board room, and the end-to-end tests
+ * wait on it before acting. Without it a test can act before the other window
+ * has subscribed and then fail for a reason that has nothing to do with the
+ * behaviour under test.
+ */
+function BoardPresenceBar({
+  connected,
+  peers,
+}: {
+  connected: boolean
+  peers: { id: string; name: string; color: string }[]
+}) {
+  return (
+    <div
+      className="flex h-8 items-center gap-3 px-6"
+      data-testid="board-presence"
+      data-connected={connected ? 'true' : 'false'}
+      data-peers={peers.length}
+    >
+      <span
+        className="text-muted-foreground flex items-center gap-1.5 text-xs"
+        title={connected ? 'Receiving live updates' : 'Not connected to the sync server'}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'size-1.5 rounded-full transition-colors duration-(--duration-base)',
+            connected ? 'bg-success' : 'bg-muted-foreground/50',
+          )}
+        />
+        {connected ? 'Live' : 'Offline'}
+      </span>
+
+      {peers.length > 0 ? (
+        <span className="flex items-center -space-x-1.5">
+          {peers.slice(0, 5).map((peer) => (
+            <span
+              key={peer.id}
+              title={peer.name}
+              style={{ backgroundColor: peer.color }}
+              className="border-background text-2xs flex size-5 items-center justify-center rounded-full border-2 font-medium text-white"
+            >
+              {peer.name.slice(0, 1).toUpperCase()}
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </div>
   )
 }
 
