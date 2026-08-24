@@ -1,4 +1,14 @@
-# Sync server. Deploy from the repository root: `fly deploy`.
+# Sync server.
+#
+# Deploy from the repository root, and disable high availability:
+#
+#     fly deploy --ha=false
+#
+# Without that flag flyctl creates a second machine on first deploy. Two
+# instances hold separate copies of every document with nothing shared between
+# them, so two people editing the same document can land on different machines
+# and never see each other. There is deliberately no Redis here; the design
+# assumes one machine.
 app = 'workroom'
 primary_region = 'ams'
 

@@ -66,8 +66,12 @@ fly secrets set "DATABASE_URL=postgresql://..." "REALTIME_JWT_SECRET=..." "SYNC_
 Then, from the **repository root** rather than `apps/sync`:
 
 ```bash
-fly deploy
+fly deploy --ha=false
 ```
+
+`--ha=false` matters. Without it flyctl creates a _second_ machine on the first deploy, for high availability. That is the wrong trade here: the two instances hold separate copies of every document with nothing shared between them, so two people editing the same document can land on different machines and never see each other's edits. There is deliberately no Redis, and the design assumes one machine.
+
+If a deploy has already created two, `fly scale count 1` removes the extra.
 
 The build context has to be the repository root, since the server imports two workspace packages that live outside its own directory. `/fly.toml` points at `apps/sync/Dockerfile` and takes care of that.
 
