@@ -140,6 +140,19 @@ jobs:
   # `needs` guarantees nothing deploys unless format, lint, typecheck and the
   # unit tests are all green first.
 
+  # Deploys upload the source and let Vercel build it, rather than building
+  # here and uploading the output.
+  #
+  # The env vars on the project are marked Sensitive, which means `vercel pull`
+  # returns the literal string "[SENSITIVE]" instead of their values. Building
+  # in CI with those produces a real build that is quietly wrong: the auth
+  # client ends up calling new URL("[SENSITIVE]") and prerendering dies.
+  #
+  # Building on Vercel avoids that, and is the better arrangement anyway. CI
+  # never handles production secrets, and the Sensitive marking keeps meaning
+  # what it says. The cost is that the build runs twice, once in the `build`
+  # job to catch errors early and once on Vercel to produce the artifact.
+
   deploy-preview:
     name: Deploy preview
     needs: [format, lint, typecheck, test, build, e2e]
@@ -153,22 +166,12 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - name: Pull Vercel environment
-        run: npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      - name: Build
-        run: npx --yes vercel@latest build --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - name: Deploy
         id: deploy
-        run: echo "url=$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")" >> "$GITHUB_OUTPUT"
+        run: |
+          url=$(npx --yes vercel@latest deploy --yes --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
@@ -191,21 +194,11 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - name: Pull Vercel environment
-        run: npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      - name: Build
-        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - name: Deploy
         id: deploy
-        run: echo "url=$(npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN")" >> "$GITHUB_OUTPUT"
+        run: |
+          url=$(npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $url"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
