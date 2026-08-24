@@ -1,3 +1,3 @@
-export * from './auth.js'
-export * from './app.js'
-export * from './columns.js'
+export * from './auth'
+export * from './app'
+export * from './columns'

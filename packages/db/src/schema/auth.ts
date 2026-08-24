@@ -1,17 +1,18 @@
 /**
  * Better Auth tables.
  *
- * Column names are camelCase because that is what Better Auth's adapter
- * expects by default. Renaming them would mean maintaining a field mapping for
- * every table and plugin, which is a lot of surface to get subtly wrong for a
- * cosmetic gain. The application tables use snake_case as normal.
+ * Mirrors the output of `npx auth@latest generate` against this project's auth
+ * config, with three deliberate differences: timestamps are `timestamptz`
+ * rather than naive, and there is an extra unique index on
+ * (organization_id, user_id) in `member`.
  *
  * A workspace is an `organization`. There is no parallel workspace table, and
  * `member.role` holds owner, admin, member or viewer.
  *
- * This mirrors the output of the Better Auth schema generator. If a Better
- * Auth upgrade adds a column, sign-in starts failing with a missing-column
- * error rather than anything subtle, so it is worth re-checking after a bump.
+ * Worth re-running the generator after a Better Auth upgrade. 1.7 added
+ * `account.issuer` and keyed accounts on (issuer, account_id); the failure
+ * mode was a clear missing-column error at sign-up rather than anything
+ * subtle, but it is still a five second check.
  */
 
 import { relations } from 'drizzle-orm'
@@ -21,53 +22,67 @@ export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  emailVerified: boolean('emailVerified').notNull().default(false),
+  emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
-  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 })
 
 export const session = pgTable(
   'session',
   {
     id: text('id').primaryKey(),
-    expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     token: text('token').notNull().unique(),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
-    ipAddress: text('ipAddress'),
-    userAgent: text('userAgent'),
-    userId: text('userId')
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     // Added by the organization plugin: which workspace this session is
     // currently acting in.
-    activeOrganizationId: text('activeOrganizationId'),
+    activeOrganizationId: text('active_organization_id'),
   },
-  (t) => [index('session_userId_idx').on(t.userId)],
+  (t) => [index('session_user_id_idx').on(t.userId)],
 )
 
 export const account = pgTable(
   'account',
   {
     id: text('id').primaryKey(),
-    accountId: text('accountId').notNull(),
-    providerId: text('providerId').notNull(),
-    userId: text('userId')
+    // Identity is keyed on (issuer, account_id) as of Better Auth 1.7.
+    issuer: text('issuer').notNull(),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    accessToken: text('accessToken'),
-    refreshToken: text('refreshToken'),
-    idToken: text('idToken'),
-    accessTokenExpiresAt: timestamp('accessTokenExpiresAt', { withTimezone: true }),
-    refreshTokenExpiresAt: timestamp('refreshTokenExpiresAt', { withTimezone: true }),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
     scope: text('scope'),
-    // Scrypt hash for email/password accounts. Null for OAuth accounts.
+    // Scrypt hash for email/password accounts, null for OAuth accounts.
     password: text('password'),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
-  (t) => [index('account_userId_idx').on(t.userId)],
+  (t) => [
+    uniqueIndex('account_issuer_account_id_uidx').on(t.issuer, t.accountId),
+    index('account_user_id_idx').on(t.userId),
+  ],
 )
 
 export const verification = pgTable(
@@ -76,45 +91,44 @@ export const verification = pgTable(
     id: text('id').primaryKey(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
-    expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [index('verification_identifier_idx').on(t.identifier)],
 )
 
-export const organization = pgTable(
-  'organization',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    slug: text('slug').notNull().unique(),
-    logo: text('logo'),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-    metadata: text('metadata'),
-  },
-  (t) => [uniqueIndex('organization_slug_uidx').on(t.slug)],
-)
+export const organization = pgTable('organization', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logo: text('logo'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  metadata: text('metadata'),
+})
 
 export const member = pgTable(
   'member',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organizationId')
+    organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    userId: text('userId')
+    userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    role: text('role').notNull(),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+    role: text('role').notNull().default('member'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index('member_organizationId_idx').on(t.organizationId),
-    index('member_userId_idx').on(t.userId),
-    // One membership per person per workspace. Better Auth does not add this
-    // itself, and without it a double-accepted invitation silently creates two
-    // rows with potentially different roles.
+    index('member_organization_id_idx').on(t.organizationId),
+    index('member_user_id_idx').on(t.userId),
+    // Not generated by Better Auth. Without it, a double-accepted invitation
+    // creates two membership rows for one person, potentially with different
+    // roles, and which one wins depends on row order.
     uniqueIndex('member_org_user_uidx').on(t.organizationId, t.userId),
   ],
 )
@@ -123,20 +137,20 @@ export const invitation = pgTable(
   'invitation',
   {
     id: text('id').primaryKey(),
-    organizationId: text('organizationId')
+    organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     email: text('email').notNull(),
     role: text('role'),
-    status: text('status').notNull(),
-    expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
-    createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-    inviterId: text('inviterId')
+    status: text('status').notNull().default('pending'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    inviterId: text('inviter_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
   (t) => [
-    index('invitation_organizationId_idx').on(t.organizationId),
+    index('invitation_organization_id_idx').on(t.organizationId),
     index('invitation_email_idx').on(t.email),
   ],
 )

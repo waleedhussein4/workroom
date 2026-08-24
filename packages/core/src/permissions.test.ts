@@ -13,7 +13,7 @@ import {
   isRole,
   type Action,
   type Role,
-} from './permissions.js'
+} from './permissions'
 
 describe('the permission table', () => {
   it('covers every action for every role without gaps', () => {

@@ -10,7 +10,7 @@ import {
   toOrderKey,
   type OrderKey,
   type Positioned,
-} from './ordering.js'
+} from './ordering'
 
 /** Deterministic bit source so jittered keys are reproducible under test. */
 function seededRandomBit(seed: number): () => boolean {

@@ -1,2 +1,2 @@
-export * from './ordering.js'
-export * from './permissions.js'
+export * from './ordering'
+export * from './permissions'

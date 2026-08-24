@@ -1,5 +1,5 @@
-export * from './client.js'
-export * as schema from './schema/index.js'
+export * from './client'
+export * as schema from './schema/index'
 export {
   account,
   board,
@@ -16,7 +16,7 @@ export {
   session,
   user,
   verification,
-} from './schema/index.js'
+} from './schema/index'
 export type {
   Board,
   BoardColumn,
@@ -29,4 +29,4 @@ export type {
   Organization,
   Session,
   User,
-} from './schema/index.js'
+} from './schema/index'

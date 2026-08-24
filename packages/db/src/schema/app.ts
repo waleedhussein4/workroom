@@ -1,7 +1,7 @@
 import { relations } from 'drizzle-orm'
 import { index, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { organization, user } from './auth.js'
-import { bytea, orderKey } from './columns.js'
+import { organization, user } from './auth'
+import { bytea, orderKey } from './columns'
 
 export const board = pgTable(
   'board',
