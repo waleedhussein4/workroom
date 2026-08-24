@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { deleteCard, updateCard } from '@/server/actions/board'
+import { CommentThread } from '@/components/board/comment-thread'
 import type { BoardMember } from '@/components/board/board-view'
 
 export function CardPanel({
@@ -55,7 +56,7 @@ export function CardPanel({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Card</DialogTitle>
         </DialogHeader>
@@ -117,6 +118,12 @@ export function CardPanel({
               </div>
             ) : null}
           </form>
+        )}
+
+        {detail === null ? null : (
+          <div className="border-border mt-2 border-t pt-5">
+            <CommentThread cardId={cardId} canComment={canEdit} />
+          </div>
         )}
       </DialogContent>
     </Dialog>
