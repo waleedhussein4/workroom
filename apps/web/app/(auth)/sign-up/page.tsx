@@ -3,10 +3,17 @@ import Link from 'next/link'
 import { AuthCard } from '@/components/auth/auth-card'
 import { SignUpForm } from '@/components/auth/sign-up-form'
 import { githubCredentials } from '@/server/env'
+import { safeNext } from '@/lib/safe-next'
 
 export const metadata: Metadata = { title: 'Create an account' }
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const { next } = await searchParams
+  const redirectTo = safeNext(next)
   const githubEnabled = Boolean(githubCredentials())
 
   return (
@@ -16,13 +23,16 @@ export default function SignUpPage() {
       footer={
         <span>
           Already have one?{' '}
-          <Link href="/sign-in" className="text-foreground font-medium hover:underline">
+          <Link
+            href={{ pathname: '/sign-in', query: next ? { next } : undefined }}
+            className="text-foreground font-medium hover:underline"
+          >
             Sign in
           </Link>
         </span>
       }
     >
-      <SignUpForm githubEnabled={githubEnabled} />
+      <SignUpForm githubEnabled={githubEnabled} redirectTo={redirectTo} />
     </AuthCard>
   )
 }

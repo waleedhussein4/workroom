@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { inviteMember } from '@/server/actions/workspace'
 
 export function InviteForm({ organizationId }: { organizationId: string }) {
+  const router = useRouter()
+  const formRef = useRef<HTMLFormElement>(null)
   const [pending, setPending] = useState(false)
 
   async function onSubmit(formData: FormData) {
@@ -20,7 +23,12 @@ export function InviteForm({ organizationId }: { organizationId: string }) {
       toast.error(result.error)
       return
     }
+
     toast.success('Invitation sent.')
+    formRef.current?.reset()
+    // Without this the new invitation does not appear until the page is
+    // reloaded by hand, which reads as the invite having silently failed.
+    router.refresh()
   }
 
   return (

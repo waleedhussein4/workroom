@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
@@ -11,7 +12,13 @@ import { FormError } from '@/components/auth/form-error'
 import { GithubButton } from '@/components/auth/github-button'
 import { authClient } from '@/lib/auth-client'
 
-export function SignInForm({ githubEnabled }: { githubEnabled: boolean }) {
+export function SignInForm({
+  githubEnabled,
+  redirectTo,
+}: {
+  githubEnabled: boolean
+  redirectTo: string
+}) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [needsVerification, setNeedsVerification] = useState(false)
@@ -42,7 +49,10 @@ export function SignInForm({ githubEnabled }: { githubEnabled: boolean }) {
 
     // Deliberately not clearing pending: the button stays busy through the
     // navigation rather than flashing back to idle first.
-    router.push('/workspaces')
+    // typedRoutes cannot check a value that is only known at runtime. The cast
+    // is safe because safeNext has already rejected anything that is not a
+    // plain in-app path.
+    router.push(redirectTo as Route)
     router.refresh()
   }
 
@@ -50,7 +60,7 @@ export function SignInForm({ githubEnabled }: { githubEnabled: boolean }) {
     <div className="flex flex-col gap-5">
       {githubEnabled ? (
         <>
-          <GithubButton label="Continue with GitHub" />
+          <GithubButton label="Continue with GitHub" redirectTo={redirectTo} />
           <div className="flex items-center gap-3">
             <span className="bg-border h-px flex-1" />
             <span className="text-muted-foreground text-2xs uppercase">or</span>

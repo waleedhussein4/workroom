@@ -11,7 +11,13 @@ import { authClient } from '@/lib/auth-client'
 
 const MIN_PASSWORD = 8
 
-export function SignUpForm({ githubEnabled }: { githubEnabled: boolean }) {
+export function SignUpForm({
+  githubEnabled,
+  redirectTo,
+}: {
+  githubEnabled: boolean
+  redirectTo: string
+}) {
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -61,7 +67,7 @@ export function SignUpForm({ githubEnabled }: { githubEnabled: boolean }) {
     <div className="flex flex-col gap-5">
       {githubEnabled ? (
         <>
-          <GithubButton label="Continue with GitHub" />
+          <GithubButton label="Continue with GitHub" redirectTo={redirectTo} />
           <div className="flex items-center gap-3">
             <span className="bg-border h-px flex-1" />
             <span className="text-muted-foreground text-2xs uppercase">or</span>

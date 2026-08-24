@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    // page.evaluate callbacks are serialised and run inside the browser, so
+    // they legitimately reference document and window even though the test
+    // file itself runs in Node.
+    "lib": ["ES2023", "DOM"],
     "types": ["node"],
     "exactOptionalPropertyTypes": false
   },

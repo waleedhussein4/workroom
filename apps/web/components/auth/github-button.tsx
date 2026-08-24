@@ -14,7 +14,7 @@ function GithubMark() {
   )
 }
 
-export function GithubButton({ label }: { label: string }) {
+export function GithubButton({ label, redirectTo }: { label: string; redirectTo: string }) {
   const [pending, setPending] = useState(false)
 
   return (
@@ -26,7 +26,7 @@ export function GithubButton({ label }: { label: string }) {
       onClick={() => {
         setPending(true)
         // Full-page redirect to GitHub; nothing after this runs.
-        void authClient.signIn.social({ provider: 'github', callbackURL: '/workspaces' })
+        void authClient.signIn.social({ provider: 'github', callbackURL: redirectTo })
       }}
     >
       {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <GithubMark />}
