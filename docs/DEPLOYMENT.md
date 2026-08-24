@@ -13,6 +13,10 @@ Nothing here needs a paid plan except the sync server, which needs a host that k
 
 Deploy the sync server first, because the web app needs its hostname at build time.
 
+The numbered sections below are the whole procedure, and each one says whether
+it is already done for the current deployment. They are kept in full so the
+document still works for a fresh clone or a rebuild from scratch.
+
 ## Where this stands
 
 Deployed and verified on 2026-08-24. The full Playwright suite was run against
@@ -42,7 +46,23 @@ connected and deploys on every push to `main`, while the Actions deploy jobs
 stay skipped because `DEPLOY_ENABLED` is unset. That works, but it means a red
 test suite still ships. Section 5 covers the choice.
 
-## 1. Database
+Section by section:
+
+| Section                  | State                                    |
+| ------------------------ | ---------------------------------------- |
+| 1. Database              | done, migrated to `0001`                 |
+| 2. Secrets               | done, all three set on both services     |
+| 3. Sync server           | done, live, scaled to one machine        |
+| 4. Web app               | done, live, all seven variables set      |
+| 5. Continuous deployment | working, but ungated. Decision open      |
+| 6. GitHub sign-in        | not done. Button hidden until configured |
+| 7. Monitoring            | not done                                 |
+
+## 1. Database — done
+
+Neon project `ep-still-wave-b2ngn1v0-pooler`, `eu-central-1`, migrations applied
+through `0001`. Nothing to do here unless a new migration is generated, in which
+case run `npm run db:migrate` against it again.
 
 Neon's free tier is enough. Create a project, then take the **pooled** connection string.
 
@@ -56,7 +76,11 @@ Run the migrations against it once:
 DATABASE_URL="postgresql://..." npm run db:migrate
 ```
 
-## 2. Secrets
+## 2. Secrets — done
+
+All three are generated and set on both Fly and Vercel. They do want rotating at
+some point, since they passed through a chat transcript; the two realtime ones
+must be changed on both services together or live updates stop.
 
 Generate three:
 
@@ -68,7 +92,12 @@ openssl rand -base64 32   # SYNC_INTERNAL_SECRET
 
 `REALTIME_JWT_SECRET` and `SYNC_INTERNAL_SECRET` **must be identical** on the web app and the sync server. The first signs the room tickets the browser trades its session for; the second guards the endpoint the web app publishes board events to. If they differ, WebSocket connections are rejected and live updates silently stop.
 
-## 3. Sync server, first
+## 3. Sync server — done
+
+Live at <https://workroom.fly.dev>, one `shared-cpu-1x` machine in `ams`, health
+check green. Secrets are set. Redeploy with `fly deploy --ha=false` from the
+repository root after any change to `apps/sync`, `packages/db` or
+`packages/core`.
 
 Fly.io, around $3/month for a shared-cpu-1x with 256 MB. That is plenty: Yjs update messages are often under 50 bytes, and twenty people typing in one document is a few hundred kilobytes a minute.
 
@@ -114,7 +143,11 @@ curl https://<app-name>.fly.dev/health     # {"ok":true,"documents":0}
 
 Write that hostname down. The web app needs it twice, as `https://` for server-to-server calls and `wss://` for the browser.
 
-## 4. Web app
+## 4. Web app — done
+
+Live at <https://workroom-web.vercel.app>, project `workroom-web`, root directory
+`apps/web`, all seven environment variables set. Redeploys automatically on push
+to `main`.
 
 Import the repository on Vercel and set **Root Directory** to `apps/web`. Leave "Include source files outside of the Root Directory" enabled, or the workspace packages will not resolve. Vercel detects Next.js and npm workspaces on its own; the build and install commands need no changes.
 
@@ -148,7 +181,10 @@ Two things that bite:
 
 `BETTER_AUTH_URL` **is a chicken and egg.** You do not know the project URL until the first deploy finishes. Deploy once, copy the URL, set the variable, redeploy. Sign-in fails with an origin mismatch until it is right.
 
-## 5. Continuous deployment
+## 5. Continuous deployment — working, but ungated
+
+Deploys happen. They are simply not conditional on the tests passing. This is a
+decision to make rather than a task to complete.
 
 There are two ways to deploy and **only one should be on at a time**.
 
@@ -173,7 +209,10 @@ Push to `main` deploys production; a pull request gets a preview.
 
 Leaving `DEPLOY_ENABLED` unset keeps the current arrangement.
 
-## 6. GitHub sign-in
+## 6. GitHub sign-in — not done
+
+No OAuth app exists, so the button is hidden and email and password is the only
+way in. Nothing is broken; the feature is simply absent.
 
 Create an OAuth app at [https://github.com/settings/developers](https://github.com/settings/developers):
 
@@ -182,7 +221,10 @@ Create an OAuth app at [https://github.com/settings/developers](https://github.c
 
 A second app pointed at `http://localhost:3000` is worth having for local work, since callback URLs cannot be wildcarded.
 
-## 7. Monitoring
+## 7. Monitoring — not done
+
+No Sentry in the codebase. Errors currently go to the Vercel and Fly runtime
+logs and nowhere else, which means nobody finds out about them unless they look.
 
 Sentry's free tier allows 5,000 errors a month. Filter WebSocket reconnect noise in `beforeSend` from the first deploy: a reconnect storm will otherwise consume a month's quota in an afternoon.
 
