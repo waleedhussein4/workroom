@@ -2,47 +2,77 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import * as schema from './schema/index'
 
-let pool: Pool | undefined
-
 /**
- * Shared connection pool.
+ * The database client.
  *
- * Kept on globalThis in development so Next's hot reload does not open a new
- * pool on every edit and exhaust the server's connection limit within a few
- * minutes of work.
+ * The connection pool is created on first use rather than on import. That is
+ * not an optimisation: `next build` imports every route to collect page data,
+ * and the auth config builds its adapter at module scope, so an eager pool
+ * makes the build itself require a live database configuration. Deferring it
+ * means a build needs no secrets and a missing DATABASE_URL surfaces as a
+ * clear error on the first query instead of a stack trace during compilation.
  */
-function getPool(): Pool {
-  const globalRef = globalThis as typeof globalThis & { __workroomPool?: Pool }
-  if (globalRef.__workroomPool) return globalRef.__workroomPool
 
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is not set. Copy .env.example and fill it in.')
+function createPool(connectionString?: string): Pool {
+  const url = connectionString ?? process.env.DATABASE_URL
+  if (!url) {
+    throw new Error('DATABASE_URL is not set. Copy .env.example to .env.local and fill it in.')
   }
 
-  const created = new Pool({
-    connectionString,
-    // Small on purpose. Serverless functions each hold their own pool, and the
-    // sync server holds one too, so a large per-instance pool is how you run
-    // out of connections on a managed Postgres.
+  return new Pool({
+    connectionString: url,
+    // Small on purpose. Every serverless instance holds its own pool and the
+    // sync server holds one too, so a large per-instance pool is how a managed
+    // Postgres runs out of connections.
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   })
-
-  if (process.env.NODE_ENV !== 'production') globalRef.__workroomPool = created
-  pool = created
-  return created
 }
 
-export function createDb(connectionString?: string) {
-  if (connectionString) {
-    return drizzle(new Pool({ connectionString, max: 5 }), { schema, casing: 'snake_case' })
+function resolvePool(connectionString?: string): Pool {
+  const globalRef = globalThis as typeof globalThis & { __workroomPool?: Pool }
+  if (!connectionString && globalRef.__workroomPool) return globalRef.__workroomPool
+
+  const pool = createPool(connectionString)
+  // Cached across hot reloads in development, which would otherwise open a
+  // fresh pool on every edit and exhaust the connection limit within minutes.
+  if (!connectionString && process.env.NODE_ENV !== 'production') {
+    globalRef.__workroomPool = pool
   }
-  return drizzle(getPool(), { schema, casing: 'snake_case' })
+  return pool
 }
 
-export type Database = ReturnType<typeof createDb>
+type DrizzleDb = ReturnType<typeof buildDb>
+
+function buildDb(connectionString?: string) {
+  return drizzle(resolvePool(connectionString), { schema, casing: 'snake_case' })
+}
+
+/**
+ * Builds the client on first property access rather than on call.
+ *
+ * Deferring only the pool is not enough: Drizzle inspects the pool while
+ * constructing the client, so the whole thing has to be lazy for `next build`
+ * to import a route without a database configured.
+ */
+export function createDb(connectionString?: string): DrizzleDb {
+  let real: DrizzleDb | undefined
+  const resolve = (): DrizzleDb => (real ??= buildDb(connectionString))
+
+  return new Proxy({} as DrizzleDb, {
+    get(_target, property, receiver) {
+      const db = resolve()
+      const value = Reflect.get(db, property, receiver) as unknown
+      return typeof value === 'function' ? (value as (...args: never[]) => unknown).bind(db) : value
+    },
+    has(_target, property) {
+      return Reflect.has(resolve(), property)
+    },
+  })
+}
+
+export type Database = DrizzleDb
 
 let cached: Database | undefined
 
@@ -53,8 +83,8 @@ export function getDb(): Database {
 }
 
 export async function closeDb(): Promise<void> {
-  await pool?.end()
-  pool = undefined
+  const globalRef = globalThis as typeof globalThis & { __workroomPool?: Pool }
+  await globalRef.__workroomPool?.end()
+  delete globalRef.__workroomPool
   cached = undefined
-  delete (globalThis as typeof globalThis & { __workroomPool?: Pool }).__workroomPool
 }
