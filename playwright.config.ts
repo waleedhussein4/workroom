@@ -21,6 +21,13 @@ export default defineConfig({
 
   reporter: isCI ? [['blob'], ['github']] : [['html', { open: 'never' }], ['list']],
 
+  /**
+   * A run against a deployed environment pays real network latency on every
+   * navigation, and the collaboration tests do a lot of them. 30 seconds is
+   * comfortable locally and not remotely.
+   */
+  timeout: process.env.E2E_BASE_URL ? 90_000 : 30_000,
+
   use: {
     baseURL,
     trace: 'on-first-retry',

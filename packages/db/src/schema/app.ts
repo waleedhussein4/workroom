@@ -11,9 +11,10 @@ export const board = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    createdBy: text('created_by')
-      .notNull()
-      .references(() => user.id),
+    // Nullable with ON DELETE SET NULL. A board belongs to the workspace, not
+    // to whoever happened to create it, so deleting an account must not delete
+    // their team's boards, and must not be blocked by them either.
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -51,9 +52,7 @@ export const card = pgTable(
     assigneeId: text('assignee_id').references(() => user.id, { onDelete: 'set null' }),
     dueDate: timestamp('due_date', { withTimezone: true }),
     position: orderKey('position').notNull(),
-    createdBy: text('created_by')
-      .notNull()
-      .references(() => user.id),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -124,9 +123,7 @@ export const document = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
     boardId: uuid('board_id').references(() => board.id, { onDelete: 'set null' }),
     title: text('title').notNull().default('Untitled'),
-    createdBy: text('created_by')
-      .notNull()
-      .references(() => user.id),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
