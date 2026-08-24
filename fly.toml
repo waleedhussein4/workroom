@@ -1,0 +1,30 @@
+# Sync server. Deploy from the repository root: `fly deploy`.
+app = 'workroom'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'apps/sync/Dockerfile'
+
+[env]
+  PORT = '1234'
+
+[http_service]
+  internal_port = 1234
+  force_https = true
+  # A sync server holds long-lived WebSocket connections. Stopping the machine
+  # when HTTP traffic goes quiet would drop every one of them, so it stays up.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

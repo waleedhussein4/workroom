@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/dist
+.git
+.github
+.local
+e2e
+test-results
+playwright-report
+blob-report
+docs
+*.log
+.env
+.env.*
