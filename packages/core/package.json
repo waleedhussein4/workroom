@@ -1,0 +1,21 @@
+{
+  "name": "@workroom/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure domain logic: card ordering and permissions. No React, no database, no framework.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fractional-indexing": "^4.0.0"
+  },
+  "devDependencies": {
+    "fast-check": "^4.4.0"
+  }
+}
