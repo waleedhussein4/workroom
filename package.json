@@ -25,7 +25,8 @@
     "db:generate": "npm run generate --workspace @workroom/db",
     "db:migrate": "npm run migrate --workspace @workroom/db",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "loadtest": "node scripts/loadtest/run.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -27,7 +27,17 @@ export function createPublishHandler(secret: string) {
     const url = new URL(request.url ?? '/', 'http://localhost')
 
     if (url.pathname === '/health') {
-      json(response, 200, { ok: true, documents: instance.documents.size })
+      const memory = process.memoryUsage()
+      json(response, 200, {
+        ok: true,
+        documents: instance.documents.size,
+        // Reported because documents stay resident after the last client
+        // leaves, and memory that never comes back down is the usual way a
+        // Yjs server dies. The load harness reads this before and after.
+        rssMb: Math.round(memory.rss / 1024 / 1024),
+        heapMb: Math.round(memory.heapUsed / 1024 / 1024),
+        uptimeSeconds: Math.round(process.uptime()),
+      })
     }
 
     // Anything else falls through to Hocuspocus's own handler.
