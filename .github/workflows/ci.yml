@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Lets a deploy be re-run without an empty commit, which matters when the
+  # only thing that changed is a secret or an environment variable.
+  workflow_dispatch:
 
 # A newer push to the same branch supersedes an in-flight run.
 concurrency:
