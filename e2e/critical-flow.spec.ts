@@ -2,7 +2,7 @@ import {
   test,
   expect,
   createWorkspace,
-  openFirstBoard,
+  openEmptyBoard,
   addCard,
   columnItems,
 } from './support/fixtures'
@@ -15,7 +15,7 @@ test.describe('the path a new user takes', () => {
     // is not an empty state.
     await expect(alice.getByRole('heading', { name: 'Boards' })).toBeVisible()
 
-    await openFirstBoard(alice, slug)
+    await openEmptyBoard(alice, slug)
     await addCard(alice, 'Write the README')
 
     // Survives a reload, so it really was persisted rather than left in
@@ -26,7 +26,7 @@ test.describe('the path a new user takes', () => {
 
   test('a card keeps its column and order across a reload', async ({ alice }) => {
     const slug = await createWorkspace(alice, `Order ${Date.now()}`)
-    await openFirstBoard(alice, slug)
+    await openEmptyBoard(alice, slug)
 
     for (const title of ['First', 'Second', 'Third']) {
       await addCard(alice, title)

@@ -53,6 +53,26 @@ export async function createWorkspace(page: Page, name: string): Promise<string>
   return slug
 }
 
+/**
+ * Creates a fresh board and opens it.
+ *
+ * A new workspace comes seeded with an example board that already has cards
+ * on it, which is right for a first impression and wrong for a test that
+ * asserts exact column contents. A newly created board gets the three default
+ * columns and nothing in them.
+ */
+export async function openEmptyBoard(page: Page, slug: string): Promise<string> {
+  await page.goto(`/w/${slug}`)
+  const before = await page.getByTestId('board-link').count()
+  await page.getByRole('button', { name: 'New board' }).first().click()
+  await expect(page.getByTestId('board-link')).toHaveCount(before + 1, { timeout: 15_000 })
+
+  // The list is ordered by name, and a new board is "Untitled board".
+  await page.getByTestId('board-link').filter({ hasText: 'Untitled board' }).first().click()
+  await page.waitForURL(/\/w\/[^/]+\/b\/[^/]+$/, { timeout: 15_000 })
+  return page.url()
+}
+
 /** Opens the workspace's seeded board and returns its url. */
 export async function openFirstBoard(page: Page, slug: string): Promise<string> {
   await page.goto(`/w/${slug}`)

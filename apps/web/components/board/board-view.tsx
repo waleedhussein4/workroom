@@ -10,6 +10,7 @@ import { BoardColumn } from '@/components/board/board-column'
 import { CardPanel } from '@/components/board/card-panel'
 import { Button } from '@/components/ui/button'
 import { moveCard } from '@/server/actions/board'
+import type { LabelView } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { useBoardChannel } from '@/lib/use-board-channel'
 
@@ -41,6 +42,7 @@ interface BoardViewProps {
   columns: BoardColumnData[]
   cards: BoardCard[]
   members: BoardMember[]
+  labels: LabelView[]
   canEdit: boolean
   currentUser: { id: string; name: string }
 }
@@ -62,6 +64,7 @@ export function BoardView({
   columns,
   cards: initialCards,
   members,
+  labels,
   canEdit,
   currentUser,
 }: BoardViewProps) {
@@ -201,6 +204,7 @@ export function BoardView({
         <CardPanel
           cardId={openCardId}
           members={members}
+          labels={labels}
           canEdit={canEdit}
           onClose={() => setOpenCardId(null)}
           onChanged={() => router.refresh()}

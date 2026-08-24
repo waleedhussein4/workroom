@@ -3,7 +3,7 @@ import {
   expect,
   eventually,
   createWorkspace,
-  openFirstBoard,
+  openEmptyBoard,
   addCard,
   dragCard,
   columnItems,
@@ -13,7 +13,7 @@ import {
 test.describe('realtime board sync', () => {
   test('a move in one window appears in the other', async ({ alice, aliceSecondWindow }) => {
     const slug = await createWorkspace(alice, `Sync ${Date.now()}`)
-    const boardUrl = await openFirstBoard(alice, slug)
+    const boardUrl = await openEmptyBoard(alice, slug)
 
     for (const title of ['Alpha', 'Beta', 'Gamma']) {
       await addCard(alice, title)
@@ -39,7 +39,7 @@ test.describe('realtime board sync', () => {
 
   test('a new card appears in the other window', async ({ alice, aliceSecondWindow }) => {
     const slug = await createWorkspace(alice, `Card sync ${Date.now()}`)
-    const boardUrl = await openFirstBoard(alice, slug)
+    const boardUrl = await openEmptyBoard(alice, slug)
     await aliceSecondWindow.goto(boardUrl)
 
     await waitForLive(alice)
@@ -66,7 +66,7 @@ test.describe('concurrent moves', () => {
    */
   test('two windows converge on the same order', async ({ alice, aliceSecondWindow }) => {
     const slug = await createWorkspace(alice, `Conflict ${Date.now()}`)
-    const boardUrl = await openFirstBoard(alice, slug)
+    const boardUrl = await openEmptyBoard(alice, slug)
 
     for (const title of ['One', 'Two', 'Three', 'Four']) {
       await addCard(alice, title)

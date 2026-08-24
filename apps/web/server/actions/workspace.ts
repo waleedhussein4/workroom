@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { and, eq } from 'drizzle-orm'
-import { canRemoveMember, canSetRole, isRole, keysBetween, type Role } from '@workroom/core'
-import { board, boardColumn, getDb, invitation, member, organization } from '@workroom/db'
+import { canRemoveMember, canSetRole, isRole, type Role } from '@workroom/core'
+import { getDb, invitation, member, organization } from '@workroom/db'
 import { auth } from '@/server/auth'
+import { seedWorkspace } from '@/server/seed'
 import { NotFoundError, requireUser, requireWorkspace, requireWorkspaceRole } from '@/server/guard'
 import { actionResult, type ActionResult } from './result'
 
@@ -36,8 +37,6 @@ async function uniqueSlug(name: string): Promise<string> {
   return `${base}-${Math.floor(Date.now() % 100000)}`
 }
 
-const DEFAULT_COLUMNS = ['Backlog', 'In progress', 'Done']
-
 export async function createWorkspace(formData: FormData): Promise<ActionResult<{ slug: string }>> {
   return actionResult(async () => {
     const user = await requireUser()
@@ -56,24 +55,10 @@ export async function createWorkspace(formData: FormData): Promise<ActionResult<
     })
     if (!created) throw new Error('Could not create the workspace.')
 
-    // A brand new workspace with nothing in it is a bad first impression, so
-    // seed one board with the three usual columns.
-    const db = getDb()
-    const [seeded] = await db
-      .insert(board)
-      .values({ orgId: created.id, name: 'First board', createdBy: user.id })
-      .returning({ id: board.id })
-
-    if (seeded) {
-      const positions = keysBetween(null, null, DEFAULT_COLUMNS.length)
-      await db.insert(boardColumn).values(
-        DEFAULT_COLUMNS.map((columnName, index) => ({
-          boardId: seeded.id,
-          name: columnName,
-          position: positions[index] as string,
-        })),
-      )
-    }
+    // A workspace that opens on an empty state gives a new visitor nothing to
+    // try, which is a poor showing for something whose pitch is that it feels
+    // alive.
+    await seedWorkspace(created.id, user.id)
 
     revalidatePath('/workspaces')
     return { slug }

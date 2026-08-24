@@ -392,3 +392,44 @@
     white-space: nowrap;
   }
 }
+
+/*
+ * Label colours.
+ *
+ * A fixed palette rather than a colour picker: eight choices that are all
+ * legible on both themes and against the card surface, which a free-form
+ * picker cannot promise.
+ */
+@layer components {
+  .label-chip {
+    --chip: var(--presence-0);
+    background-color: color-mix(in oklch, var(--chip) 16%, transparent);
+    color: color-mix(in oklch, var(--chip) 72%, var(--color-foreground));
+    border: 1px solid color-mix(in oklch, var(--chip) 30%, transparent);
+  }
+
+  .label-chip[data-color='red'] {
+    --chip: var(--presence-0);
+  }
+  .label-chip[data-color='amber'] {
+    --chip: var(--presence-1);
+  }
+  .label-chip[data-color='green'] {
+    --chip: var(--presence-2);
+  }
+  .label-chip[data-color='teal'] {
+    --chip: var(--presence-3);
+  }
+  .label-chip[data-color='blue'] {
+    --chip: var(--presence-4);
+  }
+  .label-chip[data-color='violet'] {
+    --chip: var(--presence-5);
+  }
+  .label-chip[data-color='magenta'] {
+    --chip: var(--presence-6);
+  }
+  .label-chip[data-color='lime'] {
+    --chip: var(--presence-7);
+  }
+}
