@@ -13,6 +13,35 @@ Nothing here needs a paid plan except the sync server, which needs a host that k
 
 Deploy the sync server first, because the web app needs its hostname at build time.
 
+## Where this stands
+
+Deployed and verified on 2026-08-24. The full Playwright suite was run against
+the live environment, not just locally, and all nine specs passed, including
+the two-window convergence test.
+
+| Piece       | Where                                                       | State |
+| ----------- | ----------------------------------------------------------- | ----- |
+| Web app     | <https://workroom-web.vercel.app>                           | live  |
+| Sync server | <https://workroom.fly.dev>, one shared-cpu-1x in `ams`      | live  |
+| Database    | Neon, `ep-still-wave-b2ngn1v0-pooler`, migrations at `0001` | live  |
+| CI          | six jobs, green                                             | green |
+
+**One thing stops a stranger signing up.** Email verification is required and
+no mail provider is configured, so the confirmation link is written to the
+Vercel runtime log and nowhere else. Nobody outside the log can finish signing
+up. Fix it either way before sharing the URL:
+
+- set `RESEND_API_KEY` and `EMAIL_FROM`, which sends real mail; or
+- set `AUTH_REQUIRE_EMAIL_VERIFICATION=false`, which drops the step entirely.
+
+The second is reasonable for a demo anyone should be able to try in a few
+seconds. The first is what a real product does.
+
+**Deploys are currently not gated on tests.** Vercel's own Git integration is
+connected and deploys on every push to `main`, while the Actions deploy jobs
+stay skipped because `DEPLOY_ENABLED` is unset. That works, but it means a red
+test suite still ships. Section 5 covers the choice.
+
 ## 1. Database
 
 Neon's free tier is enough. Create a project, then take the **pooled** connection string.
@@ -121,7 +150,15 @@ Two things that bite:
 
 ## 5. Continuous deployment
 
-The deploy jobs already exist in `.github/workflows/ci.yml` and are gated on format, lint, typecheck, unit tests, build and end-to-end all passing. Deploying from Actions rather than Vercel's own Git integration is deliberate: the Git integration deploys whether or not CI passed.
+There are two ways to deploy and **only one should be on at a time**.
+
+Right now Vercel's Git integration is connected, so every push to `main` ships
+regardless of whether the tests passed. That is the simpler setup and it is
+working, but it gives up the thing the Actions jobs exist for.
+
+The deploy jobs in `.github/workflows/ci.yml` are gated on format, lint,
+typecheck, unit tests, build and end-to-end all passing. To switch to them,
+disconnect the Vercel Git integration first, or the same commit deploys twice.
 
 They stay skipped until a repository variable turns them on:
 
@@ -134,7 +171,7 @@ gh variable set DEPLOY_ENABLED --body true
 
 Push to `main` deploys production; a pull request gets a preview.
 
-If you would rather let Vercel's own Git integration handle deploys, leave `DEPLOY_ENABLED` unset and disconnect nothing. The two are alternatives, not partners: turning both on deploys twice.
+Leaving `DEPLOY_ENABLED` unset keeps the current arrangement.
 
 ## 6. GitHub sign-in
 
