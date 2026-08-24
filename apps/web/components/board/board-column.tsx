@@ -8,6 +8,8 @@ import { BoardCardTile } from '@/components/board/board-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createCard } from '@/server/actions/board'
+import { ColumnMenu } from '@/components/board/column-menu'
+import type { ColumnNeighbours } from '@/components/board/board-view'
 import type { BoardCard, BoardColumnData, BoardMember } from '@/components/board/board-view'
 
 export function BoardColumn({
@@ -17,6 +19,7 @@ export function BoardColumn({
   canEdit,
   draggingCardId,
   remoteDragging,
+  neighbours,
   onOpenCard,
 }: {
   column: BoardColumnData
@@ -25,6 +28,7 @@ export function BoardColumn({
   canEdit: boolean
   draggingCardId: string | null
   remoteDragging: Record<string, { name: string; color: string }>
+  neighbours: ColumnNeighbours
   onOpenCard: (cardId: string) => void
 }) {
   const router = useRouter()
@@ -53,11 +57,22 @@ export function BoardColumn({
       className="bg-muted/40 flex w-72 shrink-0 flex-col rounded-xl"
       aria-label={column.name}
     >
-      <header className="flex items-center justify-between px-3 pt-3 pb-2">
-        <h2 className="text-foreground text-sm font-medium">
-          {column.name}
-          <span className="text-muted-foreground tabular ml-2 text-xs">{cards.length}</span>
-        </h2>
+      <header className="flex items-center gap-2 px-3 pt-3 pb-2">
+        {canEdit ? (
+          <ColumnMenu
+            columnId={column.id}
+            name={column.name}
+            cardCount={cards.length}
+            canMoveLeft={neighbours.canMoveLeft}
+            canMoveRight={neighbours.canMoveRight}
+            neighbours={neighbours.targets}
+          />
+        ) : (
+          <h2 className="text-foreground truncate text-sm font-medium">
+            {column.name}
+            <span className="text-muted-foreground tabular ml-2 text-xs">{cards.length}</span>
+          </h2>
+        )}
       </header>
 
       <ul

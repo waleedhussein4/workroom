@@ -31,6 +31,37 @@ export interface BoardColumnData {
   position: string
 }
 
+/**
+ * Where a column lands if it moves one place in either direction.
+ *
+ * Computed by the board because only it knows the full order, and expressed
+ * as neighbour ids for the same reason card moves are: the server generates
+ * the key from committed state rather than trusting a position from the
+ * client.
+ */
+export interface ColumnNeighbours {
+  canMoveLeft: boolean
+  canMoveRight: boolean
+  targets: {
+    left: { beforeId: string | null; afterId: string | null }
+    right: { beforeId: string | null; afterId: string | null }
+  }
+}
+
+export function columnNeighbours(columns: BoardColumnData[], index: number): ColumnNeighbours {
+  const at = (i: number) => columns[i]?.id ?? null
+  return {
+    canMoveLeft: index > 0,
+    canMoveRight: index < columns.length - 1,
+    targets: {
+      // Moving left means sitting between the two columns to the left.
+      left: { beforeId: at(index - 2), afterId: at(index - 1) },
+      // Moving right means sitting between the two to the right.
+      right: { beforeId: at(index + 1), afterId: at(index + 2) },
+    },
+  }
+}
+
 export interface BoardMember {
   id: string
   name: string
@@ -183,10 +214,11 @@ export function BoardView({
         }}
       >
         <div className="flex h-full items-start gap-3 overflow-x-auto px-6 pb-6">
-          {columns.map((column) => (
+          {columns.map((column, index) => (
             <BoardColumn
               key={column.id}
               column={column}
+              neighbours={columnNeighbours(columns, index)}
               cards={cardsFor(column.id)}
               members={members}
               canEdit={canEdit}
