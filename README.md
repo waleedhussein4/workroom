@@ -96,7 +96,7 @@ npm run dev:sync                  # ws://localhost:1234
 
 Without a sync server the app still works: boards fall back to ordinary navigation and documents open read-only-ish, with the board showing "Offline" instead of "Live".
 
-Email has no provider by default. Verification and invitation links are printed to the server console, so the flows can be exercised locally without signing up for anything.
+Email has no provider by default. Confirmation and invitation links are printed to the server console, so both flows can be exercised locally without signing up for anything, and email confirmation is skipped so sign-up still completes. Setting `RESEND_API_KEY` and `EMAIL_FROM` sends the messages and turns confirmation on.
 
 ```bash
 npm test                          # unit tests

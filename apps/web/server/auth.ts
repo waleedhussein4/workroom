@@ -4,20 +4,16 @@ import { organization } from 'better-auth/plugins'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { getDb, schema } from '@workroom/db'
 import { ac, organizationRoles } from './access'
-import { sendEmail } from './email'
-import { githubCredentials, optional } from './env'
+import { emailConfigured, sendEmail } from './email'
+import { emailVerificationRequired, githubCredentials, optional } from './env'
 
 const appUrl = optional('BETTER_AUTH_URL') ?? 'http://localhost:3000'
 const github = githubCredentials()
 
-/**
- * Email confirmation is required by default and only turned off deliberately.
- *
- * The end-to-end suite sets this, because the alternative is scraping a link
- * out of server logs in every sign-up test. It is opt-out rather than opt-in
- * so that forgetting to set it in production fails safe.
- */
-const requireEmailVerification = optional('AUTH_REQUIRE_EMAIL_VERIFICATION') !== 'false'
+const requireEmailVerification = emailVerificationRequired(
+  optional('AUTH_REQUIRE_EMAIL_VERIFICATION'),
+  emailConfigured(),
+)
 
 export const auth = betterAuth({
   appName: 'Workroom',
