@@ -74,6 +74,15 @@ export function createDb(connectionString?: string): DrizzleDb {
 
 export type Database = DrizzleDb
 
+/**
+ * An open transaction handle, as handed to `db.transaction(async (tx) => ...)`.
+ *
+ * Named so that logic operating inside a transaction can be written once and
+ * called both by a server action and by a test that opens two transactions at
+ * the same time.
+ */
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
+
 let cached: Database | undefined
 
 /** The application database handle. */

@@ -12,6 +12,7 @@ import {
 } from '@workroom/core'
 import { board, boardColumn, card, getDb } from '@workroom/db'
 import { NotFoundError, requireBoard, requireCard, requireWorkspaceRole } from '@/server/guard'
+import { placeCard } from '@/server/place-card'
 import { publish } from '@/server/publish'
 import { actionResult, type ActionResult } from './result'
 
@@ -264,47 +265,10 @@ export async function moveCard(
       throw new Error('That column is on a different board.')
     }
 
-    const result = await db.transaction(async (tx) => {
-      // Lock the neighbours so a concurrent move cannot renumber them between
-      // the read and the write.
-      const neighbourIds = [input.beforeId, input.afterId].filter((id): id is string => id !== null)
-
-      const neighbours =
-        neighbourIds.length > 0
-          ? await tx
-              .select({ id: card.id, position: card.position, columnId: card.columnId })
-              .from(card)
-              .where(inArray(card.id, neighbourIds))
-              .for('update')
-          : []
-
-      const before = neighbours.find((n) => n.id === input.beforeId)
-      const after = neighbours.find((n) => n.id === input.afterId)
-
-      // A neighbour can vanish or move away between the drag starting and the
-      // write landing. Treat a missing one as an open end rather than failing
-      // the move: the card still lands in a sensible place.
-      const lowerKey =
-        before && before.columnId === input.toColumnId ? (before.position as OrderKey) : null
-      const upperKey =
-        after && after.columnId === input.toColumnId ? (after.position as OrderKey) : null
-
-      let position: OrderKey
-      if (lowerKey !== null && upperKey !== null && lowerKey >= upperKey) {
-        // The neighbours are no longer adjacent or have swapped. Fall back to
-        // appending after the lower one rather than throwing.
-        position = keyBetween(lowerKey, null)
-      } else {
-        position = keyBetween(lowerKey, upperKey)
-      }
-
-      await tx
-        .update(card)
-        .set({ columnId: input.toColumnId, position, updatedAt: new Date() })
-        .where(eq(card.id, input.cardId))
-
-      return { position: position as string, columnId: input.toColumnId }
-    })
+    // The neighbours are locked and the key generated inside the transaction.
+    // See `placeCard`, which is separated out so a test can call it from two
+    // transactions at once against a real Postgres.
+    const result = await db.transaction((tx) => placeCard(tx, input))
 
     await publish(context.boardId, {
       type: 'card.moved',
