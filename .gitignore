@@ -51,3 +51,6 @@ Thumbs.db
 # misc
 .turbo/
 *.local
+
+# local planning notes, not part of the project
+.local/

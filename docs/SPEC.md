@@ -1,160 +1,57 @@
-# Workroom — Product & Engineering Spec
+# Workroom
 
-> **Status:** Approved and in build. Foundation and CI are in place; the ordering core is partially implemented in `packages/core`. Remaining M0 work is the Next.js app shell.
-> **Last updated:** 2026-08-24
-> **Note:** All library versions in §3 were verified against npm and official docs on 2026-08-24. Re-verify before starting a milestone that hasn't begun — several of these move fast, and §3.1 exists because stale assumptions are the main risk here.
+Workroom is a collaborative workspace for small teams. It combines Kanban boards for planning with live documents for writing, and everything in it syncs in real time.
 
----
+This document covers the product surfaces, the data model, and the design decisions that aren't obvious from reading the code. The ordering section is the important one.
 
-## 1. Context
+## Who it's for
 
-### Why this project exists
+Small teams of builders: indie hackers, two-to-five person dev and design teams, student project groups. The kind of team that currently runs a Trello board, a shared Google Doc, and a Discord channel, and would rather have one thing.
 
-This is a **portfolio/resume project**, not a startup. Its job is to make a reader conclude "this person can ship production software" in under two minutes. That goal, not feature count, drives every decision below.
+Two surfaces, because planning and thinking need different tools:
 
-The strategy is to pick one problem that is _genuinely_ hard — **real-time collaborative editing with defined conflict-resolution semantics** — and solve it properly, then wrap it in enough product polish that it reads as a real app rather than a demo. Everything that does not serve that goal is cut.
+- **Boards.** Structured work. Columns, cards, assignees, due dates. Queryable.
+- **Docs.** Freeform writing. Rich text, checklists, code blocks.
 
-### What it is
+## Product surfaces
 
-**Workroom** is a real-time collaborative workspace for small teams of makers — indie hackers, small dev/design teams, student project groups. Two surfaces in one place:
+### Workspaces
 
-- **Boards** — Kanban planning. Structured, queryable, permission-checked.
-- **Docs** — freeform collaborative rich text. Unstructured, character-level merge.
+The top-level container. A user can belong to several. Members have one of four roles:
 
-That pairing is deliberate: it forces two _different_ conflict-resolution strategies in one codebase, which is exactly what makes the engineering interesting and the interview conversation good.
+| Role   | Boards               | Cards | Docs | Comments        | Members                     | Settings               |
+| ------ | -------------------- | ----- | ---- | --------------- | --------------------------- | ---------------------- |
+| owner  | full                 | full  | full | full            | invite, remove, set roles   | edit, delete workspace |
+| admin  | full                 | full  | full | full            | invite, remove (not owners) | edit                   |
+| member | create, read, update | full  | full | create/edit own | read                        | read                   |
+| viewer | read                 | read  | read | read            | read                        | read                   |
 
-### The single technical claim this project makes
+Every mutation checks the caller's role server-side. Hiding a button in the UI is a convenience, not a control.
 
-> Concurrent edits never corrupt state, and I can prove it — with unit tests, a two-browser E2E test, and a 20-client load harness that asserts convergence.
+### Boards
 
-Two mechanisms, chosen because they are the right tool for each shape of data:
+Board, columns, cards. Cards carry a title, description, assignee, labels, due date, and a comment thread.
 
-| Surface              | Data shape                                              | Mechanism                                                                   | Source of truth              |
-| -------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------- |
-| **Board card order** | Short ordered list, needs SQL queries + row-level authz | **Fractional indexing**, server-assigned keys, `(position, id)` total order | Postgres                     |
-| **Doc body**         | Character sequence, needs true concurrent typing        | **Yjs CRDT** (`Y.XmlFragment`)                                              | Yjs, snapshotted to Postgres |
+Drag-and-drop reordering syncs to everyone viewing the board. The bar is that two people dragging different cards at the same moment must not end up seeing different column orders. How that's guaranteed is in [Ordering](#ordering).
 
-The interesting part is not that both exist — it's knowing _why each one is wrong for the other surface_, which is documented in §6.4.
+### Docs
 
-### Non-goals
+Rich text: headings, bullet and ordered lists, task checkboxes, code blocks, blockquotes, links. A doc can hang off a board or stand alone in the workspace.
 
-No AI features. No billing. No native mobile. No admin backoffice. No multi-region. These are stated up front so scope creep has to argue against a written decision.
+Several people can type in the same paragraph at once. Merging happens per character, not per save.
 
----
+### Presence
 
-## 2. Product surfaces (MVP)
+- Labelled cursors in docs
+- Avatar stack on boards showing who's looking
+- A ghost on a card somebody else is dragging
+- Online/idle, where idle is 60 seconds without input
 
-MVP is the whole of this section, fully polished. Anything not here is Phase 2 (§13).
+### Comments
 
-### 2.1 Workspace
+Flat threads on cards. Author, body, timestamps. You can edit and delete your own. They appear live.
 
-Top-level container. Users can belong to several. Has members with roles.
-
-| Role       | Boards               | Cards | Docs | Comments        | Members                    | Settings               |
-| ---------- | -------------------- | ----- | ---- | --------------- | -------------------------- | ---------------------- |
-| **owner**  | CRUD                 | CRUD  | CRUD | CRUD            | invite/remove/change role  | edit, delete workspace |
-| **admin**  | CRUD                 | CRUD  | CRUD | CRUD            | invite/remove (not owners) | edit                   |
-| **member** | create, read, update | CRUD  | CRUD | create/edit own | read                       | read                   |
-| **viewer** | read                 | read  | read | read            | read                       | read                   |
-
-Enforced **server-side on every mutation**. UI hiding is cosmetic only.
-
-### 2.2 Boards
-
-Kanban board → columns → cards. Cards have title, description, assignee, labels, due date, comment thread.
-
-**Drag-and-drop reorders sync live across all viewers.** Two people dragging different cards at the same moment must never produce divergent column order on any client. This is the acceptance bar, and it is tested three ways (§10).
-
-### 2.3 Docs
-
-Rich text: headings (h1–h3), bullet/ordered lists, task checkboxes, code blocks, blockquotes, links, horizontal rules. Attached to a board or standalone in the workspace.
-
-**Multiple people type simultaneously with character-level merge and live labelled cursors.** Not last-write-wins.
-
-### 2.4 Presence
-
-- Live cursors with name + colour in docs
-- Avatar stack on boards showing who's viewing
-- "X is dragging this card" ghost indicator
-- Online / idle status (idle after 60s without input)
-
-### 2.5 Comments
-
-Flat threads on cards. Author, body, timestamps, edit/delete own. Live-updating.
-
-### 2.6 Cross-cutting polish
-
-Every data surface has a designed **empty**, **loading (skeleton, not spinner)**, and **error (with retry)** state. Light + dark mode. No blank screens, ever.
-
----
-
-## 3. Stack
-
-Every version below was verified against npm / official docs on **2026-08-24**. Items marked ⚠️ are places where a mid-2025 assumption is now wrong — these are the traps.
-
-| Layer           | Choice                                              | Version                   |
-| --------------- | --------------------------------------------------- | ------------------------- |
-| Framework       | Next.js (App Router)                                | `16.3.3`+ ⚠️              |
-| Runtime         | React                                               | `19.2`                    |
-| Language        | TypeScript                                          | `5.9`+                    |
-| Styling         | Tailwind CSS                                        | `4.3.3` ⚠️                |
-| Components      | shadcn/ui (Base UI)                                 | CLI `4.19.0` ⚠️           |
-| Animation       | `motion`                                            | `13.1.1` ⚠️               |
-| Drag & drop     | `@dnd-kit/react`                                    | `0.5.0` (pinned exact) ⚠️ |
-| Ordering        | `fractional-indexing` (jitter implemented in-house) | `4.0.0`                   |
-| Auth            | Better Auth + organization plugin                   | `1.7.1` ⚠️                |
-| ORM             | Drizzle ORM / drizzle-kit                           | `0.45.2` / `0.31.10`      |
-| Database        | Neon Postgres (free)                                | PG 17                     |
-| CRDT            | `yjs`                                               | `13.6.32` ⚠️              |
-| Editor          | Tiptap + `@tiptap/y-tiptap`                         | `3.30.x` / `3.0.9` ⚠️     |
-| Sync server     | Hocuspocus                                          | `4.6.0` ⚠️                |
-| Unit tests      | Vitest + fast-check                                 | `4.1.x` ⚠️                |
-| E2E             | Playwright                                          | `1.62.1` ⚠️               |
-| Local DB tests  | PGlite                                              | `0.5.7`                   |
-| Monitoring      | `@sentry/nextjs`                                    | `10.70.x` ⚠️              |
-| Package manager | npm workspaces                                      | npm 11.6.2                |
-| Node            | 24 LTS                                              | 24.13.0 (installed)       |
-
-### 3.1 The traps, explicitly
-
-These cost days if discovered late.
-
-1. **⚠️ `middleware.ts` is deprecated in Next 16 → `proxy.ts`**, and it runs on the Node runtime now. Do not put authorization in it regardless (CVE-2025-29927 let attackers skip middleware entirely with a header). Auth goes in a DAL called from each action/page.
-2. **⚠️ Do NOT enable `cacheComponents`.** It's opt-in in 16.3. Enabling it forces `<Suspense>` around anything reading request data and makes Next keep previous routes mounted via `<Activity>` — which re-runs WebSocket effects on back-navigation. Not worth the complexity here. Everything stays dynamic by default, which is correct for a live app anyway.
-3. **⚠️ `next lint` was removed.** Use the ESLint CLI directly; `next build` no longer lints.
-4. **⚠️ Yjs v14 dropped the `Y.Array` move operation** (May 2026) and the Yjs team's own recommended replacement is _fractional indexing_. Stay on `yjs@13.6.32` — v14 is RC, lives under a new `@y/*` npm scope, and has inconsistent dist-tags.
-5. **⚠️ `y-websocket` v3 deleted its bundled server.** `y-websocket/bin/server` no longer exists. Hocuspocus is the maintained self-hosted backend.
-6. **⚠️ Tiptap renamed the cursor extension.** `@tiptap/extension-collaboration-cursor` is frozen at v2. Use `@tiptap/extension-collaboration-caret`. CSS classes changed `.collaboration-cursor__*` → `.collaboration-carets__*`.
-7. **⚠️ Tiptap collab extensions now depend on `@tiptap/y-tiptap`, not `y-prosemirror`.** Installing `y-prosemirror` out of habit puts two ProseMirror↔Yjs bindings in the bundle.
-8. **⚠️ Tiptap's install docs funnel you to `@tiptap-pro/provider` (paid, $59/mo).** It is a sales funnel, not a licensing requirement. `@tiptap/extension-collaboration`, `-caret`, `@tiptap/y-tiptap`, and Hocuspocus are all **MIT and free**. Swap in `@hocuspocus/provider`.
-9. **⚠️ `next-auth` `latest` is still v4; v5 is `5.0.0-beta.32` after ~3 years of beta.** More importantly its Credentials provider **forces `strategy: 'jwt'`** — you cannot have database sessions with password login. That alone disqualifies it here.
-10. **⚠️ Tailwind v4 has no `tailwind.config.js`.** Config is CSS (`@theme`), dark mode is `@custom-variant`, and the PostCSS plugin moved to `@tailwindcss/postcss`. Also silent renames: `shadow-sm`→`shadow-xs`, `ring`→`ring-3`, default border colour is `currentColor`.
-11. **⚠️ shadcn/ui defaults to Base UI, not Radix** (July 2026). Theming is OKLCH + `@theme inline`; `tailwindcss-animate` → `tw-animate-css`; no `forwardRef`.
-12. **⚠️ There is no dnd-kit v7.** The maintained line restarted at `0.x` (`@dnd-kit/react`). The old `@dnd-kit/core` v6 is labelled "Legacy" on the docs site.
-13. **⚠️ GitHub Actions: `checkout@v6`, `setup-node@v6`** — not v4.
-14. **⚠️ Vitest 4: `workspace` → `projects`**, `maxThreads` → `maxWorkers`, and `vi.restoreAllMocks()` no longer resets `vi.fn()`.
-15. **⚠️ Sentry: `sentry.client.config.ts` is gone** → `instrumentation-client.ts`.
-16. **⚠️ Supabase pauses free projects after 1 week of inactivity** and requires a manual dashboard restore. Disqualifying for a link on a résumé. Neon auto-resumes.
-17. **⚠️ Vercel Hobby prohibits commercial use** — including asking for donations. Fine for a personal portfolio piece; do not monetise it without moving to Pro.
-18. **Postgres collation:** fractional-index keys are case-sensitive and must compare by byte order. `position` columns **must** be `text COLLATE "C"`. Default locale collation sorts `'A'` and `'a'` by locale rules and silently disagrees with the client. This is the single most likely production footgun in the project.
-
-### 3.2 Decisions and their rationale
-
-**Better Auth over Auth.js and Clerk.** The brief requires email/password + OAuth + workspace roles enforced server-side. Auth.js can't give database sessions alongside password login. Clerk hosts identity elsewhere (webhook-mirrored, eventually consistent) and its free tier fixes sessions at 7 days with Clerk branding. Better Auth ships email/password with scrypt hashing, verification, reset, and email-enumeration defence built in; sessions live in _our_ Postgres; and its `organization()` plugin + `createAccessControl` model maps directly onto owner/admin/member/viewer as **pure data**, which is what makes §10.1's permission tests trivial.
-_Risk:_ young library, actively patching real security bugs. _Mitigation:_ pin the exact version, watch the advisory feed, re-check before each deploy.
-
-**Drizzle over Prisma 7.** Prisma 7 is genuinely good now (Rust-free, ~90% smaller) but it's ESM-only with a mandatory codegen step at a custom output path. Drizzle's schema is plain TypeScript values with no codegen, so permission and ordering helpers import straight into Vitest with zero test-pipeline setup. `drizzle-kit generate` also emits readable SQL you can review in a PR — which matters when the indexes and collation _are_ the correctness argument.
-
-**Tiptap over BlockNote.** BlockNote is faster to Notion-parity (collab and multi-cursor built in) but its `@blocknote/xl-*` packages are GPL-3.0/commercial, and "I installed BlockNote" is a weaker story than "I wired ProseMirror to a CRDT." Tiptap is MIT throughout with a first-party Yjs binding.
-
-**Self-hosted Hocuspocus over Liveblocks.** Liveblocks is the better _product_ decision and the worse _résumé_ decision — with it, the architecture section reads "I configured a provider." Its free tier is also capped at 3,000 collaboration-minutes/month, which is ~150 minutes with 20 concurrent editors; one demo day and the app **pauses**. Self-hosting costs ~$3/mo and buys real talking points: JWT auth in `onAuthenticate`, read-only downgrade, snapshot persistence with debounce, awareness fan-out.
-
-**`@dnd-kit/react` 0.5.0 over Pragmatic DnD.** Its `move` helper, `OptimisticSortingPlugin`, and multi-list guide are purpose-built for exactly this problem, and keyboard drag is built in (Pragmatic uses native HTML5 DnD, which is not keyboard-accessible — you'd hand-build a "Move to…" menu).
-_Risk:_ pre-1.0, npm dist-tag `beta`, one maintainer, and I could not verify keyboard-drag parity on the new API. _Mitigations:_ pin `0.5.0` exactly (0.x minors are breaking); put **every** dnd-kit import behind one `<BoardDnd>` wrapper exposing `onCardMoved({cardId, toColumnId, beforeId, afterId})`, so ordering logic and tests never touch the library; and **spike keyboard drag on day one** (§11, M3) — if it's missing, fall back to legacy `@dnd-kit/core` 6.3.1, which is a one-file change.
-
----
-
-## 4. Architecture
+## Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────┐
@@ -168,12 +65,11 @@ _Risk:_ pre-1.0, npm dist-tag `beta`, one maintainer, and I could not verify key
           │ (HTTPS)         └───────────────────┼────────────┐
           ▼                                     ▼            │
 ┌──────────────────────┐            ┌──────────────────────┐ │
-│ Next.js 16 @ Vercel  │            │ Hocuspocus @ Fly.io  │ │
+│ Next.js @ Vercel     │            │ Hocuspocus @ Fly.io  │ │
 │  • Better Auth       │  ticket    │  • onAuthenticate    │ │
-│  • DAL / guards      │───JWT────▶ │    (verifies JWT)    │ │
-│  • Server Actions    │            │  • doc:<id> rooms    │ │
-│  • /api/realtime/    │  broadcast │  • board:<id> rooms  │ │
-│    ticket            │───HTTP───▶ │  • /internal/publish │ │
+│  • guards            │───JWT────▶ │  • doc:<id> rooms    │ │
+│  • Server Actions    │  publish   │  • board:<id> rooms  │ │
+│  • ticket endpoint   │───HTTP───▶ │  • /internal/publish │ │
 └──────────┬───────────┘  (secret)  └──────────┬───────────┘ │
            │                                   │             │
            │        ┌──────────────────┐       │             │
@@ -184,180 +80,171 @@ _Risk:_ pre-1.0, npm dist-tag `beta`, one maintainer, and I could not verify key
   Yjs updates ─────────────────────────────────────────────┘
 ```
 
-### 4.1 Two realtime channels, one connection
+Two services. The Next.js app owns HTTP, auth, and all writes to Postgres. A separate Node process runs Hocuspocus and owns WebSocket connections. They share a database and two secrets.
 
-The sync server hosts two kinds of room over the same WebSocket:
+Splitting them isn't architectural purity, it's a constraint. Serverless functions cap connection lifetime, and a document sync that drops every few minutes and has to resync is not a real-time system.
 
-- **`doc:<documentId>`** — a real `Y.Doc`. Body content lives in a `Y.XmlFragment`; Tiptap binds to it; awareness carries cursor + selection. Persisted as a snapshot to Postgres.
-- **`board:<boardId>`** — awareness **only** (who's viewing, who's dragging what) plus server-published mutation events. **No board data lives in a Y.Doc.** The room is a fan-out pipe.
+### Two kinds of room
 
-### 4.2 Board mutation flow — server-authoritative
+The sync server serves two room types over the same socket.
 
-This is the important one. Postgres is the sole source of truth for card order.
+`doc:<documentId>` holds an actual `Y.Doc`. Body content lives in a `Y.XmlFragment`, Tiptap binds to it, and awareness carries cursor and selection. It's snapshotted to Postgres.
 
-1. User drags a card. Client optimistically reorders locally and computes a provisional key (instant feedback, no network wait).
-2. Client calls the `moveCard` Server Action with **neighbour IDs, not a key**: `{ cardId, toColumnId, beforeId, afterId }`.
-3. Server action: session → workspace membership → `can(role, 'card:update')`. Rejects otherwise.
-4. Inside one transaction: re-read the two neighbours' current keys, compute a **jittered** key between them, `UPDATE` the single card row.
-5. Server calls `POST /internal/publish` on the sync server (shared secret) with the event `{ type: 'card.moved', boardId, cardId, toColumnId, position, actorId }`.
-6. Sync server `broadcastStateless` to room `board:<boardId>`.
-7. Other clients patch their local cache and re-sort by `(position, id)`. The acting client reconciles its provisional key against the authoritative one.
+`board:<boardId>` holds no document at all. It carries awareness (who's viewing, who's dragging) plus mutation events published by the server. It's a fan-out pipe, nothing more. No board data lives in a CRDT.
 
-**Why neighbour IDs and not a client-computed key?** Because the server re-reading neighbours inside the transaction is what makes concurrent inserts into the same gap safe — this is Figma's "server assigns a unique position" guarantee. The client's optimistic key is a UI convenience that gets reconciled away.
+### Moving a card
 
-**Why publish from the server and not the client?** Only the server knows a write actually committed and passed authorization. A client-published event could announce a mutation that never happened.
+Postgres is the only source of truth for card order.
 
-**Reconnect behaviour:** on WebSocket reconnect the client refetches the board. This covers any events missed while disconnected without needing a revision-gap protocol in MVP.
+1. The user drags. The client reorders locally and computes a provisional key so there's no wait.
+2. The client calls the `moveCard` action with **neighbour ids, not a key**: `{ cardId, toColumnId, beforeId, afterId }`.
+3. The action resolves the session, the workspace membership, and the role. It rejects if the role can't update cards.
+4. In one transaction: re-read both neighbours' current keys, generate a jittered key between them, update the one card row.
+5. The action posts the event to the sync server's `/internal/publish` endpoint behind a shared secret.
+6. The sync server broadcasts it to `board:<boardId>`.
+7. Other clients patch their cache and re-sort. The mover reconciles its provisional key with the real one.
 
-### 4.3 Doc flow
+Sending neighbour ids rather than a key is what makes concurrent drops into the same gap safe. The server reads the neighbours inside the transaction, so it's working from committed state rather than whatever the client saw a moment ago. The client's optimistic key exists only so the card moves under the cursor immediately.
 
-1. Client requests a ticket, connects to `doc:<id>`.
-2. Hocuspocus `onLoadDocument` reads `document_state.state` (bytea) → `Y.applyUpdate`.
-3. Tiptap edits produce Yjs updates; the server relays them and (debounced 2s, max 10s) `onStoreDocument` writes `Y.encodeStateAsUpdate(doc)` back to the same row.
-4. Awareness carries `{ user: { id, name, color } }` and cursor position; never persisted.
+Publishing from the server rather than the client is deliberate too. Only the server knows a write actually committed and passed authorization.
 
-**Persistence rule, non-negotiable:** `onLoadDocument` must return the **exact bytes** that were stored. Never reconstruct a `Y.Doc` from editor JSON/HTML on the server — that generates fresh client IDs and merging it duplicates the entire document. Store bytes, return bytes.
+On reconnect the client refetches the board, which covers anything missed while the socket was down.
 
-### 4.4 WebSocket authentication
+### Editing a doc
 
-Browsers cannot set headers on `new WebSocket()`, so a short-lived signed ticket is used:
+The client asks for a ticket, connects to `doc:<id>`, and Hocuspocus loads the stored state into a `Y.Doc`. Edits produce Yjs updates that the server relays and, debounced at 2 seconds with a 10 second ceiling, writes back as a snapshot.
 
-```
-POST /api/realtime/ticket  { room: "doc:abc" | "board:xyz" }
-  → session (Better Auth) → resolve room to its workspace
-  → assert membership + can(role, 'doc:read' | 'board:read')
-  → sign JWT { sub, room, canWrite, exp: now + 60s }  [REALTIME_JWT_SECRET]
+One rule with no exceptions: **the load hook returns the exact bytes that were stored.** Never rebuild a `Y.Doc` from editor JSON or HTML on the server. A rebuilt document has fresh client ids, and merging it into a live one duplicates the entire contents.
 
-wss://sync.workroom.app/doc:abc?token=<jwt>
-  → Hocuspocus onAuthenticate:
-      verify signature + exp
-      assert payload.room === documentName       ← prevents room-hopping
-      connection.readOnly = !payload.canWrite    ← viewers get read-only
-      return { userId, role }                    ← becomes ctx in later hooks
-```
+Awareness state is never persisted.
 
-The `payload.room === documentName` check is what stops a member of workspace A from taking a valid ticket and connecting to workspace B's document.
+### WebSocket auth
 
-### 4.5 Repo layout — npm workspaces monorepo
+Browsers can't set headers on `new WebSocket()`, so the client trades a session for a short-lived ticket.
 
 ```
-workroom/
-├── apps/
-│   ├── web/                    Next.js 16 app
-│   │   ├── app/
-│   │   │   ├── (marketing)/            landing, sign-in, sign-up
-│   │   │   ├── (app)/[workspace]/      boards, docs, settings
-│   │   │   └── api/
-│   │   │       ├── auth/[...all]/      Better Auth handler
-│   │   │       └── realtime/ticket/    WS ticket minting
-│   │   ├── components/
-│   │   │   ├── ui/                     shadcn primitives
-│   │   │   ├── board/                  BoardDnd wrapper, Column, Card
-│   │   │   ├── doc/                    Editor (ssr:false), CursorLayer
-│   │   │   └── presence/               AvatarStack, PresenceProvider
-│   │   ├── server/
-│   │   │   ├── auth.ts                 Better Auth instance
-│   │   │   ├── guard.ts                requireWorkspaceRole() — the DAL
-│   │   │   ├── actions/                Server Actions
-│   │   │   └── publish.ts              → sync server /internal/publish
-│   │   └── instrumentation*.ts         Sentry
-│   └── sync/                   Hocuspocus server
-│       ├── src/index.ts                Server config + hooks
-│       ├── src/persistence.ts          Database extension → Postgres
-│       ├── src/publish.ts              /internal/publish HTTP endpoint
-│       └── Dockerfile
-├── packages/
-│   ├── db/                     Drizzle schema + migrations (shared)
-│   └── core/                   PURE logic — no React, no DB, no next/*
-│       ├── ordering.ts                 fractional indexing helpers
-│       ├── permissions.ts              can(role, action)
-│       └── *.test.ts                   the highest-value tests in the repo
-├── e2e/                        Playwright
-├── scripts/loadtest/           N-client Yjs convergence harness
-├── docs/
-│   ├── SPEC.md                 this document
-│   ├── ARCHITECTURE.md         diagram + conflict-resolution writeup
-│   └── demo.gif
-└── .github/workflows/ci.yml
+POST /api/realtime/ticket  { room: "doc:abc" }
+  session -> resolve the room to its workspace -> check membership and role
+  -> sign a JWT { sub, room, canWrite, exp: +60s }
+
+wss://sync.../doc:abc?token=<jwt>
+  onAuthenticate:
+    verify signature and expiry
+    assert payload.room === documentName
+    connection.readOnly = !payload.canWrite
 ```
 
-`packages/core` being pure and dependency-free is a deliberate structural choice: it is what lets the correctness argument be tested in milliseconds with no infrastructure.
+The `payload.room === documentName` check is the important line. Without it a valid ticket for one room would open any room.
 
----
+## Ordering
 
-## 5. Data model
+Board order is stored per row as a fractional index: an opaque string that sorts lexicographically. To drop a card between two others you generate a key strictly between theirs. Moving a card writes exactly one row.
 
-Drizzle schema in `packages/db/src/schema.ts`. Real migrations via `drizzle-kit generate` + `migrate` — never `push` outside local dev.
+```
+generateKeyBetween(null, null)  -> "a0"    first card
+generateKeyBetween("a0", null)  -> "a1"    append
+generateKeyBetween("a0", "a1")  -> "a0V"   insert between
+generateKeyBetween(null, "a0")  -> "Zz"    prepend
+```
 
-### 5.1 Auth tables (Better Auth managed)
+Strings rather than floats because doubles run out of mantissa after about 52 bisections, at which point two adjacent items become numerically equal.
 
-`user`, `session`, `account`, `verification`, and from the organization plugin: `organization`, `member`, `invitation`.
+### The failure mode
 
-**A workspace _is_ a Better Auth organization.** No parallel table. `member.role` holds `owner | admin | member | viewer`.
+`generateKeyBetween` is deterministic. Two clients looking at the same gap compute the same key. That's not a probability, it's a certainty whenever two people drop cards into the same place at once.
 
-### 5.2 Application tables
+The consequence is subtle. Nothing in the database is corrupt. But `ORDER BY position` alone is not a total order once keys tie, so Postgres is free to return the tied rows in either order, and it can return a different order to different sessions. One person sees `[X, Y]`, the other sees `[Y, X]`, and both are looking at identical data.
+
+### Three layers
+
+**A total order.** Every read path sorts by `(position, id)`. SQL, the client cache, the optimistic reducer, test fixtures. Ties become harmless because every client independently computes the same sequence. This is the actual fix, and everything else is insurance on top of it.
+
+There's a test that asserts a tie converges, and a second test asserting that it _stops_ converging if the `id` tiebreak is removed. The second one exists so that whoever eventually decides `comparePositioned` looks over-complicated finds out immediately.
+
+**Server-assigned keys.** The move API takes neighbour ids and the server generates the key inside the transaction, so it can't be working from a stale view of the gap.
+
+**Jitter.** Bisecting the remaining range 30 times, choosing a side at random each time, makes identical keys rare instead of certain. Costs a few characters per key.
+
+Jitter is implemented directly in `packages/core/src/ordering.ts` rather than pulled from `jittered-fractional-indexing`, which pins `fractional-indexing@^3.2.0`. Two copies of the key generator in one dependency tree is a bad trade for the one module everything else depends on being correct. The technique is ten lines and the bit source is injectable, which also makes the tests deterministic.
+
+There's a safety valve: any column whose longest key passes 64 characters gets rebalanced with evenly spaced keys in a single transaction. Reaching that requires pathological repeated insertion into one gap, but the watchdog means it degrades instead of growing forever. Don't rebalance a column while a drag is in flight on it, since it rewrites every row.
+
+### Dragging against live updates
+
+While a drag is in progress, order events for the affected columns are buffered rather than applied. Everything else still applies: title changes, label changes, other columns, presence. Freezing the whole board during a drag is worse than briefly freezing one column.
+
+On drop, the buffer flushes and the order is re-derived and diffed against the optimistic state. If the write was rejected, the card animates back with a toast rather than sitting somewhere it wasn't saved.
+
+The board also broadcasts who's dragging what. It doesn't prevent conflicts but it removes most of the perceived ones.
+
+### Why not one mechanism for both surfaces
+
+Fractional indexing on document text would be wrong. It interleaves: two people each inserting a run of items at the same spot produce `A1 B1 A2 B2`. For cards in a column that's cosmetic. For characters in a sentence it's unreadable.
+
+A CRDT for card order would also be wrong. A `Y.Doc` is an opaque binary log, so "every card assigned to me, in order" means materialising every board in Node. Authorization is per-document rather than per-row. And order doesn't exist until the document loads, so first paint has nothing to sort by.
+
+Yjs removed the `Y.Array` move operation in v14 for related reasons, since reorder-as-delete-plus-insert can duplicate or drop the moved element under concurrency. Their suggested replacement is fractional indexing.
+
+## Data model
+
+Drizzle schema in `packages/db`. Migrations are generated and reviewed as SQL; `push` is for local scratch work only.
+
+A workspace **is** a Better Auth organization. There's no parallel table, and `member.role` holds the four roles.
 
 ```sql
--- BOARDS ---------------------------------------------------------------
 board (
-  id            uuid PK,
-  org_id        text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-  name          text NOT NULL,
-  created_by    text NOT NULL REFERENCES "user"(id),
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  id uuid PK,
+  org_id text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  created_by text NOT NULL REFERENCES "user"(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 )
 INDEX board_org_idx ON board (org_id, created_at DESC)
 
 board_column (
-  id            uuid PK,
-  board_id      uuid NOT NULL REFERENCES board(id) ON DELETE CASCADE,
-  name          text NOT NULL,
-  position      text COLLATE "C" NOT NULL,        -- fractional index
-  created_at    timestamptz NOT NULL DEFAULT now()
+  id uuid PK,
+  board_id uuid NOT NULL REFERENCES board(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  position text COLLATE "C" NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
 )
 INDEX board_column_order_idx ON board_column (board_id, position, id)
 
 card (
-  id            uuid PK,
-  board_id      uuid NOT NULL REFERENCES board(id) ON DELETE CASCADE,
-  column_id     uuid NOT NULL REFERENCES board_column(id) ON DELETE CASCADE,
-  title         text NOT NULL,
-  description   text,
-  assignee_id   text REFERENCES "user"(id) ON DELETE SET NULL,
-  due_date      timestamptz,
-  position      text COLLATE "C" NOT NULL,        -- fractional index
-  created_by    text NOT NULL REFERENCES "user"(id),
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  id uuid PK,
+  board_id uuid NOT NULL REFERENCES board(id) ON DELETE CASCADE,
+  column_id uuid NOT NULL REFERENCES board_column(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  description text,
+  assignee_id text REFERENCES "user"(id) ON DELETE SET NULL,
+  due_date timestamptz,
+  position text COLLATE "C" NOT NULL,
+  created_by text NOT NULL REFERENCES "user"(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 )
-INDEX card_order_idx  ON card (column_id, position, id)   -- the ordering index
-INDEX card_board_idx  ON card (board_id)
--- Deliberately NO unique constraint on (column_id, position). See §6.2.
+INDEX card_order_idx ON card (column_id, position, id)
+INDEX card_board_idx ON card (board_id)
 
-label (
-  id uuid PK, org_id text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-  name text NOT NULL, color text NOT NULL
-)
-card_label ( card_id uuid, label_id uuid, PRIMARY KEY (card_id, label_id) )
+label (id uuid PK, org_id text NOT NULL, name text NOT NULL, color text NOT NULL)
+card_label (card_id uuid, label_id uuid, PRIMARY KEY (card_id, label_id))
 
--- COMMENTS -------------------------------------------------------------
 comment (
   id uuid PK,
-  card_id   uuid NOT NULL REFERENCES card(id) ON DELETE CASCADE,
+  card_id uuid NOT NULL REFERENCES card(id) ON DELETE CASCADE,
   author_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-  body      text NOT NULL,
+  body text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 )
 INDEX comment_card_idx ON comment (card_id, created_at)
 
--- DOCS -----------------------------------------------------------------
 document (
   id uuid PK,
-  org_id     text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
-  board_id   uuid REFERENCES board(id) ON DELETE SET NULL,   -- nullable
-  title      text NOT NULL DEFAULT 'Untitled',
+  org_id text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  board_id uuid REFERENCES board(id) ON DELETE SET NULL,
+  title text NOT NULL DEFAULT 'Untitled',
   created_by text NOT NULL REFERENCES "user"(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -366,359 +253,120 @@ INDEX document_org_idx ON document (org_id, updated_at DESC)
 
 document_state (
   document_id uuid PK REFERENCES document(id) ON DELETE CASCADE,
-  state       bytea NOT NULL,           -- Y.encodeStateAsUpdate(doc)
-  updated_at  timestamptz NOT NULL DEFAULT now()
+  state bytea NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
 )
 ```
 
-Two notes that are easy to get wrong:
+Two things here are load-bearing and easy to miss.
 
-- **`COLLATE "C"` on both `position` columns is mandatory.** Without it Postgres sorts by locale and disagrees with the client's byte-order comparison.
-- **`bytea` needs a Drizzle custom type.** Verify a round-trip (`Uint8Array` → DB → `Uint8Array`) in a test on day one — any ORM layer that base64-encodes asymmetrically will silently corrupt documents.
+**`COLLATE "C"` on the position columns is not optional.** Fractional index keys are case-sensitive and compare by byte. Under a default locale collation Postgres sorts `'A'` and `'a'` by locale rules, which disagrees with the client's comparison, and you get an ordering bug that looks exactly like the concurrency bug this whole design exists to prevent.
 
----
+**There is no unique constraint on `(column_id, position)`.** Adding one would turn a harmless tie into a failed write and a card visibly snapping back. The tie is already handled by the sort.
 
-## 6. Conflict resolution — the technical core
+## Design
 
-This section is the one an interviewer will actually read. It also becomes `docs/ARCHITECTURE.md`.
+Tokens live in `apps/web/app/globals.css`. Tailwind v4 is CSS-first: no `tailwind.config.js`, theme values in `@theme`, dark mode as a `@custom-variant`.
 
-### 6.1 Board order: fractional indexing
+Colours are OKLCH so lightness is perceptually uniform and the dark palette can be derived by moving L rather than hand-picking a second set of hexes.
 
-Each card holds an opaque string `position` that sorts lexicographically. To place a card between two neighbours, compute a key strictly between theirs. **One row written per move** — the smallest possible surface for two writers to collide on.
+- **Type scale**: 11 / 12 / 13 / 15 / 18 / 24 / 32, tighter than Tailwind's default because this is a dense product UI
+- **Radius**: 6 / 10 / 14
+- **Motion**: 120ms for hover and press, 180ms for enter and exit, 240ms for reflow caused by somebody else's edit
+- **Presence**: eight fixed hues at fixed lightness and chroma, assigned by hashing a user id, so a person keeps their colour and stays legible on both themes
 
-```
-generateKeyBetween(null, null)  → "a0"    first card
-generateKeyBetween("a0", null)  → "a1"    append
-generateKeyBetween("a0", "a1")  → "a0V"   insert between
-generateKeyBetween(null, "a0")  → "Zz"    prepend
-```
+Remote changes animate more slowly than local ones on purpose. A card that teleports because someone else moved it reads as a glitch; a card that slides reads as an event.
 
-Strings rather than floats because doubles run out of mantissa after ~52 bisections and adjacent items become numerically equal.
+dnd-kit owns movement during a drag. Motion is used for enter, exit, and remote reflow only. Both libraries transforming the same nodes is a fight nobody wins.
 
-### 6.2 The failure mode, and the three-layer defence
+Every surface that loads data has a designed empty, loading, and error state. Loading is a skeleton shaped like the real content, not a centred spinner.
 
-`generateKeyBetween` is **deterministic**. If two clients both look at the gap `("a0", "a1")`, both compute `"a0V"`. This is not a probability — it is a certainty whenever two people drop cards into the same gap concurrently.
+## Stack
 
-What breaks: `ORDER BY position` alone is **not a total order** when keys tie. Postgres may return the tied rows in either order, and _differently to different sessions_. Client A sees `[X, Y]`, client B sees `[Y, X]`. Nothing is "wrong" in the data — the sort is just underdetermined. That is precisely the corruption the acceptance bar names.
+| Layer       | Choice                            |
+| ----------- | --------------------------------- |
+| Framework   | Next.js 16, App Router            |
+| UI          | React 19, Tailwind 4, shadcn/ui   |
+| Drag & drop | @dnd-kit/react                    |
+| Auth        | Better Auth + organization plugin |
+| Database    | Postgres (Neon) via Drizzle       |
+| CRDT        | Yjs 13 + Hocuspocus 4             |
+| Editor      | Tiptap 3                          |
+| Tests       | Vitest, fast-check, Playwright    |
 
-Three layers, in order of importance:
+### Notes on the choices
 
-1. **Total-order tiebreak — this is the actual fix.** Every read path sorts by `(position, id)`: SQL, client cache, optimistic reducer, test fixtures. Now tied keys are _harmless_ — every client independently computes the same order and boards converge. A test asserts this and a second test asserts that removing the tiebreak breaks it, so nobody deletes it later.
-2. **Server-assigned keys.** The mutation API takes neighbour IDs; the server re-reads them inside the transaction and generates the key. Eliminates the race at the source.
-3. **Jitter.** `keyBetween` with `jitterBits: 30` makes identical keys rare rather than certain (~1 in 47,000 for concurrent actors), at the cost of ~3 extra characters. `getRandomBit` is injected so tests are deterministic. Jitter alone is _not_ sufficient — it lowers probability, it does not create a total order. Layers 1 and 3 are both required.
+**Better Auth over Auth.js.** Auth.js can't give database sessions alongside password login. Its credentials provider forces `strategy: 'jwt'`, which means either giving up server-side session revocation or reimplementing sessions by hand. Better Auth ships email/password with scrypt, verification, reset, and enumeration defence, keeps sessions in our Postgres, and its organization plugin models the four roles as plain data that's trivial to unit test.
 
-   > **Deviation from the original plan, recorded 2026-08-24.** Jitter is implemented directly in `packages/core/src/ordering.ts` rather than via the `jittered-fractional-indexing` package. That package pins `fractional-indexing@^3.2.0`, so using it alongside `4.0.0` would put two copies of the key generator in the dependency tree — an unacceptable hazard for the one module whose correctness the project is built on. The technique is the same (bisect the remaining range `jitterBits` times, choosing a side at random each time) and fits in ten lines, with the bit source injected so tests are deterministic.
+**Drizzle over Prisma.** Prisma 7 is much better than its reputation, but it's ESM-only with a mandatory codegen step at a custom output path. Drizzle's schema is plain TypeScript values, so permission and ordering helpers import straight into Vitest with nothing to generate first. Generated migrations are readable SQL, which matters when the indexes and the collation _are_ the correctness argument.
 
-Plus a safety valve: if any column's max key length exceeds 64 characters, rebalance that column with `generateNKeysBetween(null, null, n)` in one transaction. Never rebalance while a drag is in flight on that column. (Jira's LexoRank has elaborate bucket machinery for exactly this — it exists because Jira rebalances hundreds of millions of rows online. Our rebalance unit is one column: a single transaction. Take the idea, skip the buckets.)
+**Self-hosted Hocuspocus over Liveblocks.** Liveblocks would be faster to build on. Its free tier is metered at 3,000 collaboration-minutes per month, which is about 150 minutes with 20 people in a room, and the app pauses when it runs out. Running a small Node process costs a few dollars a month and doesn't have a cliff.
 
-### 6.3 Optimistic drag vs. incoming remote reorder
+**Tiptap over BlockNote.** BlockNote gets to Notion-like faster and has collaboration built in, but its `xl-` packages are GPL or commercial. Tiptap is MIT throughout with a first-party Yjs binding.
 
-The "don't yank the card out from under the user" pattern:
+**@dnd-kit/react over Pragmatic drag-and-drop.** dnd-kit's `move` helper and optimistic sorting plugin are built for exactly this multi-column problem, and keyboard dragging works out of the box. Pragmatic is built on the native HTML5 drag API, which isn't keyboard-accessible, so you'd hand-build that path.
 
-- `isDraggingRef` gates remote application. While a drag is active, **buffer** incoming order events for the affected columns.
-- **Still apply** orthogonal remote updates during a drag — title/label/assignee changes, other columns, presence. Freezing the whole board is worse UX than briefly freezing one column's order.
-- On drag end (or cancel), flush the buffer, then re-derive order from `(position, id)` and diff against optimistic state.
-- Check `event.canceled` first in `onDragEnd` and restore the drag-start snapshot if true.
-- Send exactly what was optimistically written, so there is no reconciliation step and no out-of-order response hazard.
-- On rejection, animate the card back to origin with a toast — never leave it visually placed but unsaved.
-- Broadcast "user X is dragging card Y" over awareness and render a ghost on other clients. It doesn't prevent conflict but it removes most of the _perceived_ conflict.
+The tradeoff is that `@dnd-kit/react` is pre-1.0 and its npm dist-tag is `beta`. It's pinned to an exact version, and every import of it lives behind a single `BoardDnd` wrapper that exposes `onCardMoved({ cardId, toColumnId, beforeId, afterId })`. Ordering logic and its tests never see the library, so swapping it is one file.
 
-One dnd-kit-specific gotcha: `OptimisticSortingPlugin` reorders DOM nodes directly during a drag, so `event.operation.source` and `.target` refer to the same element. Read `index` / `initialIndex` / `group` / `initialGroup` off the source instead of comparing IDs.
+### Version gotchas
 
-### 6.4 Docs: Yjs CRDT — and why not fractional indexing
+Things that cost time if you find them late.
 
-Doc bodies use `Y.XmlFragment`, a real sequence CRDT. Concurrent character insertions merge correctly.
+- Next 16 renamed `middleware.ts` to `proxy.ts`. Don't put authorization in either one; CVE-2025-29927 let attackers skip middleware entirely with a header. Auth checks belong in the actions and pages themselves.
+- `cacheComponents` is deliberately off. It forces `<Suspense>` around anything reading request data and keeps previous routes mounted, which re-runs WebSocket effects on back-navigation.
+- `next lint` was removed. ESLint runs from its own CLI.
+- Stay on `yjs` 13. v14 is RC, lives under a new npm scope, and has inconsistent dist-tags.
+- `y-websocket` v3 deleted its bundled server.
+- Tiptap's collaboration cursor package is now `@tiptap/extension-collaboration-caret`, and its collab extensions depend on `@tiptap/y-tiptap` rather than `y-prosemirror`. Installing `y-prosemirror` out of habit puts two ProseMirror bindings in the bundle.
+- Tiptap's docs push you toward `@tiptap-pro/provider`, which is paid. The collaboration extensions themselves are MIT and work fine with `@hocuspocus/provider`.
+- Tailwind 4 renamed several utilities silently: `shadow-sm` is now `shadow-xs`, `ring` is `ring-3`, and the default border colour is `currentColor`.
+- shadcn/ui defaults to Base UI rather than Radix as of July 2026.
 
-**Fractional indexing would be wrong here.** It has a known _interleaving_ failure: if two peers each insert a run of items at the same location, the runs interleave (`A1 B1 A2 B2` instead of `A1 A2 B1 B2`). For photos in an album that's cosmetic. For characters in a sentence it's word salad.
+## Testing
 
-**And a CRDT would be wrong for the board.** A `Y.Doc` is an opaque binary update log — you cannot `SELECT` against it ("show me all cards assigned to me, in order" becomes "materialise every board doc in Node"), authorization is document-granular rather than row-level, and ordering doesn't exist until the doc materialises, so first paint has no order. Yjs also **dropped its `Y.Array` move operation in v14** because reorder-as-delete+insert can duplicate or drop the moved element under concurrency — and the Yjs team's recommended replacement is fractional indexing.
+The ordering and permission logic lives in `packages/core` with no React, no database, and no framework imports. That's not tidiness, it's so the correctness argument runs in milliseconds with nothing to set up.
 
-Right tool, right shape of data, both ways. That symmetry is the writeup.
+**Unit.** Property-based tests over key generation: results land strictly between their bounds, random insertion sequences round-trip through a sort, bulk generation is shorter than repeated single generation. Then the concurrency simulation: two clients into one gap converge, all permutations of concurrent moves converge, rebalance preserves order exactly. Permissions are a table test over roles by actions.
 
----
+There's also a collation guard asserting that a plain JS sort matches byte order, so nobody reaches for `localeCompare`.
 
-## 7. Design system
+**Integration.** PGlite for repository and migration tests, since it needs no Docker. One test has to run against real Postgres: two concurrent `moveCard` transactions on the same gap. PGlite is single-connection and would pass that test for the wrong reason.
 
-Not default component-library styling. Opinionated, consistent, and dark-mode-first-class.
+**End to end.** Playwright with two browser contexts and separate stored sessions, exposed as a fixture so a collaboration test is three lines. Ordering is asserted with `toHaveText([...])`, which checks content and order in one auto-retrying call.
 
-### 7.1 Tokens (Tailwind v4 CSS-first, OKLCH)
+The one that matters: both users drag different cards into the same gap simultaneously, then both pages are asserted to show the _same_ order. Not a specific order. Convergence.
 
-```css
-@import 'tailwindcss';
-@import 'tw-animate-css';
-@custom-variant dark (&:where(.dark, .dark *));
+No `waitForTimeout` anywhere. Synchronise before acting by asserting the second user's board has rendered and presence shows two people.
 
-@theme {
-  /* type scale — 1.2 ratio, tabular for counts */
-  --text-2xs: 0.6875rem; /* 11 — metadata, timestamps */
-  --text-xs: 0.75rem; /* 12 — labels, badges       */
-  --text-sm: 0.8125rem; /* 13 — UI default           */
-  --text-base: 0.9375rem; /* 15 — body / card titles   */
-  --text-lg: 1.125rem; /* 18 — section headings     */
-  --text-xl: 1.5rem; /* 24 — page titles          */
-  --text-2xl: 2rem; /* 32 — display              */
+**Load.** A Node harness driving N headless Yjs clients, measuring observed sync latency and asserting that every client's document hashes identically at the end. Watch memory after all clients disconnect; documents that never get evicted are the usual way a Yjs server dies.
 
-  /* spacing: 4px base — 1,2,3,4,6,8,12 */
-  --radius-sm: 0.375rem; /* 6  */
-  --radius-md: 0.625rem; /* 10 */
-  --radius-lg: 0.875rem; /* 14 */
+## Deployment
 
-  /* motion */
-  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-micro: 120ms; /* hover, press           */
-  --duration-base: 180ms; /* enter/exit, popovers   */
-  --duration-layout: 240ms; /* reflow after remote op */
-}
+| Component   | Where                  |
+| ----------- | ---------------------- |
+| Web app     | Vercel                 |
+| Database    | Neon                   |
+| Sync server | Fly.io, single machine |
+| CI/CD       | GitHub Actions         |
+| Monitoring  | Sentry                 |
 
-:root {
-  --bg: oklch(0.99 0.002 265);
-  --surface: oklch(1 0 0);
-  --surface-2: oklch(0.975 0.003 265);
-  --border: oklch(0.92 0.004 265);
-  --fg: oklch(0.21 0.012 265);
-  --fg-muted: oklch(0.52 0.01 265);
-  --accent: oklch(0.55 0.19 277); /* indigo-violet */
-  --accent-fg: oklch(0.99 0.005 277);
-  --success: oklch(0.62 0.15 152);
-  --warning: oklch(0.72 0.15 75);
-  --danger: oklch(0.58 0.2 25);
-}
+Deploys run from GitHub Actions rather than Vercel's Git integration, because Actions can gate them on the test jobs passing and the Git integration can't.
 
-.dark {
-  --bg: oklch(0.17 0.011 265);
-  --surface: oklch(0.21 0.013 265);
-  --surface-2: oklch(0.25 0.014 265);
-  --border: oklch(0.3 0.014 265);
-  --fg: oklch(0.96 0.004 265);
-  --fg-muted: oklch(0.68 0.011 265);
-  --accent: oklch(0.68 0.17 277);
-  --accent-fg: oklch(0.17 0.011 277);
-}
+One sync machine means one instance owns every room, so there's no Redis and no sticky-session routing to think about. That's plenty: Yjs update messages are often under 50 bytes, and 20 people typing in one document is a few hundred kilobytes a minute.
 
-@theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-border: var(--border);
-  --color-fg: var(--fg);
-  --color-accent: var(--accent);
-  /* …etc */
-}
-```
+Secrets: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `REALTIME_JWT_SECRET`, `SYNC_INTERNAL_SECRET`, `NEXT_PUBLIC_SYNC_URL`, and the Sentry set. `REALTIME_JWT_SECRET` and `SYNC_INTERNAL_SECRET` have to match between the web app and the sync server.
 
-**Presence palette** — 8 fixed OKLCH hues at fixed lightness/chroma so they read on both themes, assigned by `hash(userId) % 8`. Used for cursors, carets, and avatar rings.
+Sentry's `beforeSend` filters WebSocket reconnect noise from the start. A reconnect storm will otherwise eat a month of quota in an afternoon.
 
-**Fonts** — Inter Variable for UI, JetBrains Mono for code blocks, both via `next/font` (self-hosted, no layout shift).
+## Later
 
-### 7.2 Motion rules
+Not now, roughly in order of value:
 
-- Card drag lift: scale `1.02`, shadow up, `120ms`.
-- Column reflow after a **remote** move: `240ms` ease-out-quint, so remote changes read as "something happened" rather than teleporting.
-- Presence avatars: enter/exit fade+scale `180ms`.
-- Cursors: `transform` transition `80ms linear` — short enough to feel live, long enough to hide jitter.
-- Respect `prefers-reduced-motion`: all of the above collapse to opacity-only.
+- Command palette
+- Activity feed, which the board rooms already carry the events for
+- Mentions and notifications
+- Public read-only share links
+- Document version history, which Yjs snapshots make cheap
+- Responsive layout
 
-**One owner for during-drag movement:** dnd-kit owns it. Motion is used only for enter/exit and remote-update reflow. Both libraries transforming the same nodes is a guaranteed fight.
-
-### 7.3 Required states
-
-A shared `<StateView>` component with `empty | loading | error` variants. **Every** data surface uses it — board list, board, card list, comment thread, doc list, doc, member list. Loading is a **skeleton matching the real layout**, never a centred spinner. Errors carry a message and a retry button. Empty states carry an illustration, one sentence, and a primary action.
-
----
-
-## 8. Milestones
-
-Each milestone ends green on CI and deployable. Real commit history is a deliverable, so commits stay small and conventional (`feat:`, `fix:`, `test:`, `chore:`).
-
-### M0 — Foundation
-
-Monorepo (npm workspaces), Next 16 + TS strict + Tailwind v4 + shadcn (Base UI), design tokens, dark mode toggle, `packages/core` and `packages/db` skeletons, ESLint + Prettier, Vitest configured with `logic`/`ui` projects, GitHub Actions running lint + typecheck + test, deployed to Vercel with a green CI badge.
-**Done when:** an empty themed shell is live at a URL and CI is green.
-
-### M1 — Auth & workspaces
-
-Better Auth with email/password + GitHub OAuth, Drizzle adapter, `organization()` plugin with the four roles via `createAccessControl`. Neon project + migrations. Sign-up/sign-in/verify/reset flows. Workspace creation, invite by email, member list, role changes. The `requireWorkspaceRole()` DAL. **`can()` unit tests — the full role × action table.**
-**Done when:** two accounts exist, one invites the other, and a member of workspace A gets a 403 from a Server Action targeting workspace B.
-
-### M2 — Ordering core (pure, no UI)
-
-`packages/core/ordering.ts`: `computeNeighbors`, `computeNewPosition(before, after, rng)`, `sortCards`, `needsRebalance`, `rebalance`. Injected RNG. Branded `OrderKey` type. **All 17 ordering tests from §10.1 written and passing before any board UI exists.**
-**Done when:** the conflict-resolution guarantee is proven in ~50ms with no infrastructure.
-
-### M3 — Board (single-user)
-
-Board CRUD, columns, cards, card detail panel (title/description/assignee/labels/due date). `<BoardDnd>` wrapper over `@dnd-kit/react`. `moveCard` Server Action wired to M2's logic. Optimistic updates. Skeletons, empty and error states.
-**⚠️ Day-one spike:** verify keyboard drag (Space → arrows → Space, Escape to cancel) and screen-reader announcements on `@dnd-kit/react` 0.5.0. If absent, fall back to `@dnd-kit/core` 6.3.1 — a one-file change inside the wrapper.
-**Done when:** one person can fully manage a board and reload to find it intact.
-
-### M4 — Sync server & board realtime
-
-`apps/sync`: Hocuspocus 4.6 on Node 24, `onAuthenticate` verifying the room-scoped JWT, read-only downgrade for viewers, `/internal/publish` behind a shared secret. Ticket endpoint in Next. Board room fan-out. Presence: avatar stack, drag ghosts, idle detection. Deployed to Fly.io (`fly scale count 1`).
-**Done when:** two browser windows show the same board and a drag in one appears in the other within ~150ms.
-
-### M5 — Live docs
-
-`document` + `document_state` tables. Hocuspocus Database extension → Postgres bytea, 2s/10s debounce. Tiptap 3 with StarterKit + TaskList + CodeBlock + Link, `Collaboration` + `CollaborationCaret`, `@hocuspocus/provider`. `immediatelyRender: false`, editor behind `next/dynamic({ssr:false})` inside a client wrapper, `Y.Doc` created in `useState(() => new Y.Doc())` and destroyed on unmount. Styled carets with name labels. Doc list, create, rename, delete.
-**Done when:** two windows type in the same paragraph simultaneously and both converge with no lost characters, and a reload restores the content.
-
-### M6 — Comments
-
-Flat threads on cards, live via the board room. Author, body, timestamps, edit/delete own. Optimistic append.
-
-### M7 — Prove it
-
-Playwright: auth setup project + `alice`/`bob` two-context fixture; critical flows (sign up → workspace → board → card); realtime sync test; **the deliberate-conflict test** (both drag different cards into the same gap via `Promise.all`, assert _convergence_, not a specific order). Load harness in `scripts/loadtest/`: N headless Yjs clients, measure p50/p95 sync latency, assert byte-identical `Y.Doc` state across all clients at the end. CI extended with a Postgres service container and Playwright sharding.
-**Done when:** `npm test` runs everything green and the load harness reports p95 < 200ms with 20 clients converging.
-
-### M8 — Ship
-
-Sentry wired (`instrumentation-client.ts`, `onRequestError`, `beforeSend` filtering WebSocket reconnect noise from day one — the free tier is only 5,000 errors/month and a reconnect storm will eat it in an afternoon). Landing page. Seeded demo workspace so a first-time visitor sees a populated board, not an empty state. README with architecture diagram, the conflict-resolution writeup, green CI badge, and a 30–60s demo GIF of two windows editing live.
-**Done when:** a stranger can sign up and be looking at a live collaborative board in under a minute.
-
----
-
-## 9. Deployment & cost
-
-| Component   | Where                                                         | Cost       |
-| ----------- | ------------------------------------------------------------- | ---------- |
-| Next.js app | Vercel Hobby (root dir `apps/web`)                            | $0         |
-| Postgres    | Neon free — 0.5 GB, 100 CU-h/mo, pooled endpoint, 10 branches | $0         |
-| Sync server | Fly.io, 1× `shared-cpu-1x` 256 MB, single machine             | ~$2–3/mo   |
-| Monitoring  | Sentry Developer                                              | $0         |
-| CI          | GitHub Actions (public repo)                                  | $0         |
-| **Total**   |                                                               | **~$3/mo** |
-
-**Why Fly.io and not free.** Render's free tier spins down after 15 minutes with a ~60s cold start; Koyeb's is 1 hour. For a link on a résumé, the sync server being asleep when someone clicks is the difference between a working demo and a broken one. $3/mo removes the risk entirely. `fly scale count 1` also means one instance owns every room, so no Redis and no sticky-session routing are needed at this scale — a single small VM handles 20 concurrent editors with a very large margin (Hocuspocus's maintainer reports >25k connections on single instances).
-
-**Preview environments:** Vercel preview deploys per PR, each pointed at a Neon branch created from `main`. Cheap, and it makes migration changes reviewable.
-
-**Secrets:** `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GITHUB_CLIENT_ID/SECRET`, `REALTIME_JWT_SECRET`, `SYNC_INTERNAL_SECRET`, `NEXT_PUBLIC_SYNC_URL`, `SENTRY_*`. `REALTIME_JWT_SECRET` and `SYNC_INTERNAL_SECRET` must be set identically on Vercel and Fly.
-
----
-
-## 10. Verification
-
-### 10.1 Unit tests — `packages/core`, node env, no DOM, no DB
-
-**Ordering invariants (property-based, `fast-check`, 1000 cases each):**
-
-1. `generateKeyBetween(a, b)` is strictly `> a` and `< b`.
-2. Random-insertion round-trip: array sorted by key equals intended order.
-3. `generateKeyBetween(a, a)` and reversed bounds both throw — and `moveCard` never constructs such a call.
-4. `generateNKeysBetween(a, b, n)` returns n strictly-increasing in-range keys, shorter than n successive single calls.
-5. Keys are canonical (no trailing `0` in the fractional part).
-6. **Collation guard:** default JS sort (code-unit order) equals byte-compare order, and `'A' < 'a'` holds — i.e. `localeCompare` is never used.
-
-**Conflict-resolution simulation** — a tiny in-memory `applyMove(state, move) → state` plus `sortCards` on `(position, id)`:
-
-7. **The anti-corruption test.** Two clients, different cards, same gap, deterministic generator → identical keys. Apply `[m1, m2]` → S1; apply `[m2, m1]` → S2. Assert `sortCards(S1) === sortCards(S2)`.
-8. **Guard test.** Same scenario with the `id` tiebreak removed → assert it _fails_, so nobody deletes the tiebreak later.
-9. Convergence across **all permutations** of k=3..5 concurrent moves.
-10. Two clients into the same gap **with jitter**, seeded `getRandomBit` → distinct keys, stable order.
-11. Self-move no-op: neighbour computation excludes the moving card (otherwise you drift or throw).
-12. Cross-column move: source column order unchanged, target correct.
-13. Move to head / tail / into an empty column (`null` bounds).
-14. **Concurrent delete + move:** client 1 moves X after Y; client 2 deletes Y. Move still lands validly; order stays total.
-15. Concurrent move of the _same_ card by two users → LWW by `updated_at`, tie broken by client id, deterministic.
-16. `rebalance()` is exactly order-preserving.
-17. Rebalance vs. concurrent move: a move computed against pre-rebalance neighbours applied post-rebalance yields a total order, or a clean retriable conflict error.
-18. Key-length watchdog fires at threshold.
-
-**Permissions:** table-test `can(role, action)` across the full 4 roles × ~15 actions matrix. Pure function, no HTTP layer.
-
-### 10.2 Integration — PGlite + one real-Postgres test
-
-PGlite for repository/query tests and migration smoke tests (no Docker needed — the dev machine has none). Round-trip test for the `bytea` custom type on day one.
-
-**One test must run against real Postgres:** two `moveCard` calls in genuinely concurrent transactions on the same gap → no deadlock, no constraint error, total order afterwards. PGlite is single-connection and would give a false pass here. Locally this runs against a Neon dev branch; in CI against the `services: postgres` container.
-
-### 10.3 E2E — Playwright, two contexts
-
-Auth setup project writes `alice.json` / `bob.json` storage states; a fixture exposes `{ alice, bob }` pages so every collaboration test is three lines.
-
-- Sign up → create workspace → create board → create card.
-- Invite flow: alice invites bob, bob accepts, bob sees the board.
-- **Realtime board sync:** alice drags, bob's column order updates — asserted with `toHaveText([...])`, which checks content _and_ order in one auto-retrying call.
-- **Realtime doc sync:** alice types, bob sees it; bob's caret appears in alice's view.
-- **The deliberate-conflict test:** `Promise.all([alice.drag(A→gap), bob.drag(B→gap)])`, then assert both pages show the _identical_ order. Assert convergence, never a specific order.
-- Authorization: bob (not a member of workspace A) gets 403/404 on its board URL.
-
-Discipline: no `waitForTimeout` anywhere; synchronise before acting (assert bob's board fully rendered and presence shows 2 users before alice acts); scoped `expect.configure({ timeout: 15_000 })` for realtime propagation rather than raising the global timeout; unique board per test so tests parallelise; use the new `retries: 'isolated'` strategy so genuine concurrency bugs aren't hidden behind blind retries.
-
-### 10.4 Load — `scripts/loadtest/`
-
-A ~150-line Node harness driving N headless Yjs clients against one doc and one board. Each client mutates on a timer with a sequence number and records when it observes every peer's op.
-
-Captured: sync latency p50/p95/p99 (target **p95 < 200ms** same-region at 20 clients), time-to-convergence after a burst, sync-server CPU and RSS, **RSS after all clients disconnect** (doc-eviction leaks are the #1 production failure of Yjs servers), and message/byte fan-out.
-
-**Asserted, not just measured:** at the end of every run all N clients' `Y.Doc` states must hash byte-identical and all N board orders must match. A load test that also proves convergence is worth ten that only measure throughput.
-
-Scenarios: steady state (20 clients, 1 op/s, 10 min); thundering herd (all 20 join within 2s); burst (all 20 drag within 1s — §6.2's conflict test under load); partition (kill half the sockets 30s, restore, assert convergence).
-
-### 10.5 CI — `.github/workflows/ci.yml`
-
-`actions/checkout@v6`, `actions/setup-node@v6` with `cache: npm`, Node 24. Jobs: **lint** (ESLint CLI — `next lint` is gone), **typecheck**, **unit** (Vitest, both projects), **e2e** (Postgres service container with `pg_isready` health check, `npx playwright install --with-deps`, sharded 4× with blob reports merged). Auto-deploy on merge to `main`. Green badge in the README.
-
-### 10.6 Manual acceptance
-
-Open two browser windows side by side. Drag a card in one — it moves in the other with a visible reflow animation. Type in a doc in both — characters interleave correctly, both carets are labelled and coloured. Kill the sync server; the UI shows a "reconnecting" state rather than dying; restart it; both windows resync without a refresh. Toggle dark mode. Load a board with no cards, a doc that fails to fetch, and a board with 200 cards.
-
----
-
-## 11. Risks
-
-| Risk                                                           | Likelihood      | Mitigation                                                                                                    |
-| -------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@dnd-kit/react` 0.5.0 lacks keyboard-drag parity              | Medium          | Day-one spike in M3. All imports behind `<BoardDnd>`; fallback to `@dnd-kit/core` 6.3.1 is a one-file change. |
-| `@dnd-kit/react` breaking change on a 0.x minor                | Medium          | Pin exact `0.5.0`. Wrapper caps blast radius.                                                                 |
-| Better Auth security patch / breaking minor                    | Medium          | Pin exact `1.7.1`. Watch the advisory feed; re-check before each deploy.                                      |
-| Postgres collation misconfigured → order disagrees with client | Medium-High     | `COLLATE "C"` in the migration + test #6 asserts byte-order equivalence.                                      |
-| `bytea` round-trip corrupts Y.Doc                              | Medium          | Explicit round-trip test on day one of M5.                                                                    |
-| Doc corruption from reconstructing `Y.Doc` server-side         | Low-High impact | Written rule in §4.3; `onLoadDocument` returns stored bytes only, never a rebuilt doc.                        |
-| Sentry free tier exhausted by reconnect storms                 | Medium          | `beforeSend` filters network/WS noise from the first commit.                                                  |
-| Next.js 16.3.3 security release (2026-08-26)                   | Certain         | Start on 16.3.3+; do not pin below it.                                                                        |
-| Neon free tier compute exhausted by a always-open pool         | Low-Medium      | Sync server uses a small pool with idle timeout; monitor CU-hours.                                            |
-| Scope creep into Phase 2                                       | High            | §13 is a written "not now" list. MVP ships first.                                                             |
-
----
-
-## 12. Definition of done
-
-- [ ] Live URL; a stranger signs up and is on a live collaborative board in under a minute
-- [ ] Two browser windows demonstrably sync board drags and doc typing
-- [ ] `README.md`: architecture diagram, conflict-resolution writeup, green CI badge, 30–60s demo GIF
-- [ ] Real commit history — dozens of small conventional commits, not one dump
-- [ ] All tests green in CI: unit, integration, E2E
-- [ ] Load harness output in the README: p95 latency at 20 concurrent, with convergence asserted
-- [ ] Sentry receiving events; no unhandled errors in a full manual pass
-- [ ] Every data surface has designed empty, loading, and error states
-- [ ] Light and dark mode both deliberate
-- [ ] Keyboard-accessible drag (or a documented, working alternative)
-
----
-
-## 13. Phase 2 — after MVP is genuinely solid
-
-Ordered by impact-per-hour. **None of these start before §12 is fully checked.**
-
-1. **Cmd+K command palette** — cheap, disproportionately impressive.
-2. **Activity feed** — makes the app feel alive; the `board:` room already carries the events.
-3. **@mentions + notifications** in comments and docs.
-4. **Public read-only share links** for boards and docs.
-5. **Doc version history** — Yjs snapshots make time-travel feasible.
-6. **Mobile-responsive layout** — Tailwind v4 container queries suit Kanban columns well.
-7. **Redis extension + multi-instance sync** — purely to demonstrate horizontal scaling; unnecessary at this load.
-
-**Permanently out of scope:** AI features, billing, native mobile, admin backoffice.
-
----
-
-## Appendix — verified reference points
-
-- Fractional indexing: [Greenspan, _Implementing Fractional Indexing_](https://observablehq.com/@dgreensp/implementing-fractional-indexing) · [Figma, _Realtime Editing of Ordered Sequences_](https://www.figma.com/blog/realtime-editing-of-ordered-sequences/) · [rocicorp/fractional-indexing](https://github.com/rocicorp/fractional-indexing)
-- Yjs dropping move → fractional indexing: [Sypytkowski, May 2026](https://www.bartoszsypytkowski.com/replacing-yjs-move-feature/)
-- Optimistic-update races: [Chan, _Drag, drop, and the optimistic update race_](https://alexmchan.com/blog/2026-06-29-concurrent-optimistic-updates)
-- dnd-kit sortable state: [Managing Sortable State](https://dndkit.com/react/guides/sortable-state-management/)
-- Hocuspocus hooks & scaling: [tiptap.dev/docs/hocuspocus](https://tiptap.dev/docs/hocuspocus/server/hooks)
-- Better Auth organization plugin: [better-auth.com/docs/plugins/organization](https://better-auth.com/docs/plugins/organization)
-- Next 16 changes: [nextjs.org/blog/next-16](https://nextjs.org/blog/next-16)
-- Playwright multi-context: [playwright.dev/docs/browser-contexts](https://playwright.dev/docs/browser-contexts)
+Deliberately not doing: AI features, billing, a native mobile app.
