@@ -8,10 +8,75 @@ import { ACCOUNTS } from './accounts'
  * separate cookies and storage. This is what makes a collaboration test three
  * lines instead of thirty.
  */
+/**
+ * Console messages that are noise rather than defects.
+ *
+ * Kept deliberately short. The point of failing on console errors is that the
+ * list stays short; every addition is a decision to stop looking at something.
+ */
+const IGNORED_CONSOLE = [
+  // Dev-only warning from Next's fast refresh machinery.
+  /Fast Refresh/i,
+  // Chromium emits this for any request the page cancels, including ones the
+  // app cancels on purpose when a component unmounts.
+  /net::ERR_ABORTED/,
+  // Websocket teardown during navigation.
+  /WebSocket is closed before the connection is established/i,
+  // The browser reporting an HTTP status, not the application failing. Several
+  // tests visit a workspace or an invitation that deliberately does not exist.
+  // A genuinely missing asset would be caught by the build rather than here.
+  /Failed to load resource.*(404|403|401)/,
+]
+
+/**
+ * Fails a test if the page logged an error.
+ *
+ * Added after a recording session surfaced "useInsertionEffect must not
+ * schedule updates" on every single drag. The board worked, every assertion
+ * passed, and the bug was invisible to the suite because nothing was looking
+ * at the console.
+ */
+const consoleErrors = new WeakMap<Page, string[]>()
+
+function isIgnored(text: string): boolean {
+  return IGNORED_CONSOLE.some((pattern) => pattern.test(text))
+}
+
+function watchConsole(page: Page) {
+  const errors: string[] = []
+  consoleErrors.set(page, errors)
+
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return
+    const text = message.text()
+    if (!isIgnored(text)) errors.push(text)
+  })
+  page.on('pageerror', (error) => {
+    if (!isIgnored(error.message)) errors.push(error.message)
+  })
+}
+
+/**
+ * Asserts the page logged nothing alarming.
+ *
+ * Called explicitly rather than automatically at teardown. Several tests visit
+ * a page that is meant to 404, and a rule that has to be argued out of on a
+ * third of the suite is not a rule worth having. Where it is called, it means
+ * something: this page did real work and should have done it quietly.
+ *
+ * Added after a recording session surfaced "useInsertionEffect must not
+ * schedule updates" on every single drag. The board worked, every assertion
+ * passed, and nothing in the suite was looking at the console.
+ */
+export function expectNoConsoleErrors(page: Page) {
+  expect(consoleErrors.get(page) ?? [], 'the page logged console errors').toEqual([])
+}
+
 export const test = base.extend<{ alice: Page; aliceSecondWindow: Page; bob: Page }>({
   alice: async ({ browser }, use) => {
     const context = await browser.newContext({ storageState: ACCOUNTS.alice.storageState })
     const page = await context.newPage()
+    watchConsole(page)
     await use(page)
     await context.close()
   },
@@ -21,12 +86,14 @@ export const test = base.extend<{ alice: Page; aliceSecondWindow: Page; bob: Pag
   aliceSecondWindow: async ({ browser }, use) => {
     const context = await browser.newContext({ storageState: ACCOUNTS.alice.storageState })
     const page = await context.newPage()
+    watchConsole(page)
     await use(page)
     await context.close()
   },
   bob: async ({ browser }, use) => {
     const context = await browser.newContext({ storageState: ACCOUNTS.bob.storageState })
     const page = await context.newPage()
+    watchConsole(page)
     await use(page)
     await context.close()
   },

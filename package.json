@@ -26,7 +26,8 @@
     "db:migrate": "npm run migrate --workspace @workroom/db",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "loadtest": "node scripts/loadtest/run.mjs"
+    "loadtest": "node scripts/loadtest/run.mjs",
+    "demo": "node scripts/demo/record.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

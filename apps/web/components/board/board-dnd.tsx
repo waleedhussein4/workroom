@@ -63,9 +63,11 @@ export function BoardDnd({
           return
         }
         // dnd-kit reorders the DOM directly during a drag, so this only keeps
-        // React's copy of the layout in step for the drop calculation.
+        // React's copy of the layout in step for the drop calculation. It is
+        // deferred for the same reason as the drag state: these callbacks run
+        // inside an insertion effect, where scheduling an update is illegal.
         const next = applyPreview(layout, event)
-        if (next) onLayoutChange(next)
+        if (next) queueMicrotask(() => onLayoutChange(next))
       }}
       onDragEnd={(event) => {
         onDragStateChange?.(null)

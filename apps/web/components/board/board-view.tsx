@@ -205,12 +205,19 @@ export function BoardView({
         onCardMoved={onCardMoved}
         disabled={!canEdit}
         onDragStateChange={(id) => {
+          // The ref is safe to write synchronously; the state is not. dnd-kit
+          // invokes this from inside an insertion effect, where React forbids
+          // scheduling an update, so the visual part is deferred by a
+          // microtask. Without this the board works but logs
+          // "useInsertionEffect must not schedule updates" on every drag.
           dragging.current = id !== null
-          setDraggingId(id)
-          if (id === null && buffered.current) {
-            buffered.current = false
-            router.refresh()
-          }
+          queueMicrotask(() => {
+            setDraggingId(id)
+            if (id === null && buffered.current) {
+              buffered.current = false
+              router.refresh()
+            }
+          })
         }}
       >
         <div className="flex h-full items-start gap-3 overflow-x-auto px-4 pb-6 sm:px-6">

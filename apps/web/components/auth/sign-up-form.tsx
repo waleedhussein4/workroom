@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import type { Route } from 'next'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +20,7 @@ export function SignUpForm({
   githubEnabled: boolean
   redirectTo: string
 }) {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -35,10 +38,10 @@ export function SignUpForm({
     }
 
     setPending(true)
-    const { error: signUpError } = await authClient.signUp.email({ name, email, password })
-    setPending(false)
+    const { data, error: signUpError } = await authClient.signUp.email({ name, email, password })
 
     if (signUpError) {
+      setPending(false)
       setError(
         signUpError.status === 422
           ? 'That email is already registered. Try signing in instead.'
@@ -47,6 +50,17 @@ export function SignUpForm({
       return
     }
 
+    // A token comes back only when the account is usable straight away, which
+    // is to say when confirmation is not required. Telling somebody to check
+    // an inbox that will never receive anything is worse than no message at
+    // all, so the two cases are distinguished rather than assumed.
+    if (data?.token) {
+      router.push(redirectTo as Route)
+      router.refresh()
+      return
+    }
+
+    setPending(false)
     setSent(email)
   }
 
