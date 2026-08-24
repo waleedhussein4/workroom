@@ -8,6 +8,7 @@ import {
   dragCard,
   columnItems,
   waitForLive,
+  expectNoConsoleErrors,
 } from './support/fixtures'
 
 test.describe('realtime board sync', () => {
@@ -35,6 +36,11 @@ test.describe('realtime board sync', () => {
     // retries until it passes.
     await eventually(columnItems(alice)).toHaveText(['Beta', 'Gamma', 'Alpha'])
     await eventually(columnItems(aliceSecondWindow)).toHaveText(['Beta', 'Gamma', 'Alpha'])
+
+    // Dragging used to log "useInsertionEffect must not schedule updates" on
+    // every move while every assertion above still passed.
+    expectNoConsoleErrors(alice)
+    expectNoConsoleErrors(aliceSecondWindow)
   })
 
   test('a new card appears in the other window', async ({ alice, aliceSecondWindow }) => {

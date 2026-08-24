@@ -46,5 +46,12 @@ export default tseslint.config(
     files: ['scripts/**/*.{js,mjs}', 'apps/sync/**/*.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
+  // The demo recorder is a Node script that also passes callbacks to
+  // page.evaluate, which are serialised and run inside the browser. Both sets
+  // of globals are legitimately in scope in one file.
+  {
+    files: ['scripts/demo/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
   prettier,
 )

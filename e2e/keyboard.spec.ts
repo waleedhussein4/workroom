@@ -5,6 +5,7 @@ import {
   openEmptyBoard,
   addCard,
   columnItems,
+  expectNoConsoleErrors,
 } from './support/fixtures'
 
 /**
@@ -50,6 +51,7 @@ test.describe('keyboard drag', () => {
     // Persisted, so the keyboard path goes through the same server action.
     await alice.reload()
     await expect(columnItems(alice)).toHaveText(['Beta', 'Alpha', 'Gamma'])
+    expectNoConsoleErrors(alice)
   })
 
   test('escape cancels a keyboard drag and leaves the order alone', async ({ alice }) => {
