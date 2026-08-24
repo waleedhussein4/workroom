@@ -112,7 +112,7 @@ On reconnect the client refetches the board, which covers anything missed while 
 
 ### Editing a doc
 
-The client asks for a ticket, connects to `doc:<id>`, and Hocuspocus loads the stored state into a `Y.Doc`. Edits produce Yjs updates that the server relays and, debounced at 2 seconds with a 10 second ceiling, writes back as a snapshot.
+The client asks for a ticket, connects to `doc:<id>`, and Hocuspocus loads the stored state into a `Y.Doc`. Edits produce Yjs updates that the server relays and, debounced at 2 seconds with a 10 second ceiling, writes back as a snapshot. Both numbers are set explicitly on the extension rather than inherited, so this paragraph stays true if the library changes its defaults.
 
 One rule with no exceptions: **the load hook returns the exact bytes that were stored.** Never rebuild a `Y.Doc` from editor JSON or HTML on the server. A rebuilt document has fresh client ids, and merging it into a live one duplicates the entire contents.
 
@@ -277,7 +277,7 @@ Colours are OKLCH so lightness is perceptually uniform and the dark palette can 
 
 Remote changes animate more slowly than local ones on purpose. A card that teleports because someone else moved it reads as a glitch; a card that slides reads as an event.
 
-dnd-kit owns movement during a drag. Motion is used for enter, exit, and remote reflow only. Both libraries transforming the same nodes is a fight nobody wins.
+dnd-kit owns movement during a drag, and nothing else animates the same nodes. Everything else is a CSS transition against the duration tokens above; there is no animation library, because a second thing transforming the elements dnd-kit is already transforming is a fight nobody wins.
 
 Every surface that loads data has a designed empty, loading, and error state. Loading is a skeleton shaped like the real content, not a centred spinner.
 
@@ -330,7 +330,15 @@ The ordering and permission logic lives in `packages/core` with no React, no dat
 
 There's also a collation guard asserting that a plain JS sort matches byte order, so nobody reaches for `localeCompare`.
 
-**Integration.** PGlite for repository and migration tests, since it needs no Docker. One test has to run against real Postgres: two concurrent `moveCard` transactions on the same gap. PGlite is single-connection and would pass that test for the wrong reason.
+**Integration.** Three tests against a real Postgres, skipped when `DATABASE_URL` is unset so a fresh clone still runs `npm test` green. They cover the things a pure function cannot reach.
+
+Two transactions are opened and confirmed live before either takes a lock, then both move a card into the same gap. That asserts the `SELECT ... FOR UPDATE` on the neighbours does not deadlock, that both commit, and that no two rows end up tied on `(position, id)`.
+
+Jitter is then pinned off so two moves produce byte-identical keys, which is the case the schema deliberately leaves unconstrained, and Postgres and the client are asserted to agree on the sequence anyway.
+
+The third asserts positions sort by byte order. The databases used for testing are created with a locale collation on purpose, so the per-column `COLLATE "C"` is what is under test rather than an accident of how the database was made.
+
+An in-process Postgres such as PGlite would be the obvious way to avoid needing a server, and it is the wrong tool for the first of those: it is single-connection, so two concurrent transactions would pass for the wrong reason.
 
 **End to end.** Playwright with two browser contexts and separate stored sessions, exposed as a fixture so a collaboration test is three lines. Ordering is asserted with `toHaveText([...])`, which checks content and order in one auto-retrying call.
 
@@ -367,6 +375,5 @@ Not now, roughly in order of value:
 - Mentions and notifications
 - Public read-only share links
 - Document version history, which Yjs snapshots make cheap
-- Responsive layout
 
 Deliberately not doing: AI features, billing, a native mobile app.

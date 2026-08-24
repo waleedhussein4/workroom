@@ -51,6 +51,13 @@ const server = new Server<TicketClaims>({
   name: process.env.INSTANCE_NAME ?? 'workroom-sync',
   port,
 
+  // How often a document is snapshotted to Postgres: after two seconds of
+  // quiet, and never more than ten seconds behind however fast someone types.
+  // These are the library's current defaults, set explicitly because the spec
+  // quotes the numbers and a default is not a promise.
+  debounce: 2_000,
+  maxDebounce: 10_000,
+
   /** Health check and the internal publish endpoint. */
   async onRequest({ request, response, instance }) {
     await publish({ request, response, instance })

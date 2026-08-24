@@ -20,25 +20,26 @@ document still works for a fresh clone or a rebuild from scratch.
 ## Where this stands
 
 Deployed and verified on 2026-08-24. The full Playwright suite was run against
-the live environment, not just locally, and all nine specs passed, including
-the two-window convergence test.
+the live environment, not just locally: 22 tests across 8 files, including the
+two-window convergence test.
 
 | Piece       | Where                                                       | State |
 | ----------- | ----------------------------------------------------------- | ----- |
 | Web app     | <https://workroom-web.vercel.app>                           | live  |
 | Sync server | <https://workroom.fly.dev>, one shared-cpu-1x in `ams`      | live  |
 | Database    | Neon, `ep-still-wave-b2ngn1v0-pooler`, migrations at `0001` | live  |
-| CI          | six jobs, green                                             | green |
+| CI          | seven jobs, green                                           | green |
 
-**One thing stops a stranger signing up.** Email verification is required and
-no mail provider is configured, so the confirmation link is written to the
-Vercel runtime log and nowhere else. Nobody outside the log can finish signing
-up. Section 8 sets that up; it takes about five minutes and needs no domain.
+**Anyone can sign up.** Email confirmation follows whether a mail provider is
+configured, so with none set it is skipped rather than demanded, and sign-up
+completes. Adding a Resend key turns confirmation on by itself. Section 8 does
+that; it takes about five minutes and needs no domain.
 
 **Deploys are gated on the tests.** A push to `main` runs format, lint,
-typecheck, unit tests, build and end to end, and only ships if all six pass.
-One pipeline covers both services: Vercel for the web app, Fly for the sync
-server. Verified working on run `32752039512`.
+typecheck, unit tests, integration tests, build and end to end, and only ships
+if all seven pass. The same seven are required on the branch, so they cannot be
+merged past either. One pipeline covers both services: Vercel for the web app,
+Fly for the sync server.
 
 Section by section:
 
@@ -51,7 +52,7 @@ Section by section:
 | 5. Continuous deployment | done, gated on six checks, both services |
 | 6. GitHub sign-in        | not done. Button hidden until configured |
 | 7. Monitoring            | done, off until a DSN is set             |
-| 8. Email                 | needs a Resend API key                   |
+| 8. Email                 | optional, off. Confirmation off with it  |
 
 ## 1. Database — done
 
@@ -185,9 +186,9 @@ Two things that bite:
 
 ## 5. Continuous deployment — done
 
-A push to `main` runs format, lint, typecheck, unit tests, build and end to
-end. Only if all six pass does anything ship, and then both services ship from
-the same run: `deploy-production` to Vercel and `deploy-sync` to Fly. Pull
+A push to `main` runs format, lint, typecheck, unit tests, integration tests,
+build and end to end. Only if all seven pass does anything ship, and then both
+services ship from the same run: `deploy-production` to Vercel and `deploy-sync` to Fly. Pull
 requests get a preview deploy. `workflow_dispatch` allows a manual re-run,
 which matters when the thing that changed was a secret rather than the code.
 
@@ -273,11 +274,12 @@ on every deploy that replaces the sync machine. `lib/sentry-filter.ts` drops
 that noise, along with aborted requests and Next's own thrown control flow,
 and has tests so the policy can be checked without a Sentry client.
 
-## 8. Email — needs an API key
+## 8. Email — optional, not configured
 
-This is the one thing standing between the deployment and a URL a stranger can
-use. Verification is required, and without a provider the confirmation link
-reaches the server log and nothing else.
+Nothing is broken without this. Email confirmation follows whether a provider
+is configured, so with none set it is skipped and sign-up completes; the
+confirmation and invitation messages are written to the runtime log instead of
+being sent. Configuring a provider turns confirmation on by itself.
 
 Resend's free tier sends 3,000 messages a month and needs no domain to start:
 messages can go out from `onboarding@resend.dev`, which is enough for a demo
@@ -298,8 +300,8 @@ a domain at <https://resend.com/domains> and change `EMAIL_FROM` to use it.
 
 Without both variables the application still runs and still creates accounts;
 the message is written to the runtime log instead of being sent. Invitations
-can be worked around in that state, because the members page exposes a
-copyable invitation link, but nothing works around an unconfirmed address.
+still work in that state, because the members page exposes a copyable
+invitation link to send by any other means.
 
 ## Checks after deploying
 
