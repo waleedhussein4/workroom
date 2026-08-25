@@ -33,7 +33,7 @@ Concurrent editing is easy to claim and easy to get subtly wrong, so each claim 
 
 **Two transactions racing for the same gap do not deadlock.** Pure functions say nothing about row locking, so this one runs against a real Postgres. Two transactions are opened and confirmed live before either takes a lock, both move a card into the same gap, and the test asserts that both commit, that the neighbours do not move, and that no two rows tie on `(position, id)`.
 
-**Byte order, not locale order.** Order keys compare byte by byte, which is why the position columns are `text COLLATE "C"`. The databases used for testing are deliberately created with a locale collation, so the per-column override is exercised rather than accidentally correct:
+**Byte order, not locale order.** Order keys compare byte by byte, which is why the position columns are `text COLLATE "C"`. Both test databases are created with a locale collation, so the override is what gets exercised rather than an accident of how the database was made:
 
 ```
 byte order  (COLLATE "C"):  A0 < Zz < a0 < a0V < z0
@@ -90,6 +90,17 @@ docs/SPEC.md    Architecture and product notes
 ```
 
 `packages/core` depends on nothing else in the repo, which is what lets the ordering and permission tests run in milliseconds with nothing to set up.
+
+### Where to start reading
+
+Four files, in this order, cover the parts that are not obvious:
+
+1. **`packages/core/src/ordering.ts`** — the total order, and the three layers that defend it. Everything else about boards follows from this file.
+2. **`packages/core/src/ordering.test.ts`** — the argument that it works, including the guard test that fails if the `id` tiebreak is ever removed.
+3. **`apps/web/server/guard.ts`** — the authorization layer. Every mutation and every page reading workspace data goes through it, and nothing depends on middleware for access control.
+4. **`apps/web/server/place-card.ts`** — the one write that has to be correct while two people are dragging, and why it takes neighbour ids instead of a key.
+
+After those, `apps/sync/src/index.ts` is the whole realtime server in about a hundred lines.
 
 ## Running it
 

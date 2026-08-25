@@ -66,6 +66,12 @@ export async function deleteLabel(
   })
 }
 
+/**
+ * Attaches or detaches one label, according to `attached`.
+ *
+ * Not a toggle: the caller sends the state it wants. Two people clicking the
+ * same label at once then converge instead of cancelling each other out.
+ */
 export async function setCardLabel(
   cardId: string,
   labelId: string,

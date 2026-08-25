@@ -30,6 +30,11 @@ export class UnauthenticatedError extends Error {
   }
 }
 
+/**
+ * Raised both when a resource does not exist and when the caller is not a
+ * member of the workspace that owns it. Keeping the two indistinguishable is
+ * what stops workspace and board ids being probed for existence.
+ */
 export class NotFoundError extends Error {
   constructor(what = 'Resource') {
     super(`${what} not found`)
@@ -60,6 +65,7 @@ export const getSession = cache(async (): Promise<SessionUser | null> => {
   return { id, name, email, image: image ?? null, emailVerified: Boolean(emailVerified) }
 })
 
+/** The signed-in user, or `UnauthenticatedError`. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSession()
   if (!user) throw new UnauthenticatedError()
@@ -152,6 +158,7 @@ export async function requireWorkspaceRole(
   return context
 }
 
+/** As `requireWorkspaceRole`, for the slug that URLs carry. */
 export async function requireWorkspaceRoleBySlug(
   slug: string,
   action: Action,

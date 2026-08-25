@@ -28,6 +28,7 @@ export class EmailNotConfiguredError extends Error {
   }
 }
 
+/** True when both a provider key and a from-address are present. */
 export function emailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
 }
