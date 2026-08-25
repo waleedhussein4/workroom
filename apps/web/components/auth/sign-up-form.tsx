@@ -22,7 +22,6 @@ export function SignUpForm({
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
   async function onSubmit(formData: FormData) {
@@ -38,7 +37,7 @@ export function SignUpForm({
     }
 
     setPending(true)
-    const { data, error: signUpError } = await authClient.signUp.email({ name, email, password })
+    const { error: signUpError } = await authClient.signUp.email({ name, email, password })
 
     if (signUpError) {
       setPending(false)
@@ -50,31 +49,10 @@ export function SignUpForm({
       return
     }
 
-    // A token comes back only when the account is usable straight away, which
-    // is to say when confirmation is not required. Telling somebody to check
-    // an inbox that will never receive anything is worse than no message at
-    // all, so the two cases are distinguished rather than assumed.
-    if (data?.token) {
-      router.push(redirectTo as Route)
-      router.refresh()
-      return
-    }
-
-    setPending(false)
-    setSent(email)
-  }
-
-  if (sent) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-foreground text-sm">
-          Check <span className="font-medium">{sent}</span> for a confirmation link.
-        </p>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          You need to confirm the address before signing in. The link expires in an hour.
-        </p>
-      </div>
-    )
+    // Deliberately not clearing pending: the button stays busy through the
+    // navigation rather than flashing back to idle first.
+    router.push(redirectTo as Route)
+    router.refresh()
   }
 
   return (

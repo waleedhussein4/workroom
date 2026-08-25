@@ -61,10 +61,7 @@ const signedUp = await setup
   .catch(() => false)
 
 if (!signedUp) {
-  console.error(
-    'Sign-up did not complete. Email verification is probably on; run the app with\n' +
-      'AUTH_REQUIRE_EMAIL_VERIFICATION=false for recording.',
-  )
+  console.error('Sign-up did not complete. Is the web app running and migrated?')
   await browser.close()
   await rm('.demo-tmp', { recursive: true, force: true })
   process.exit(1)

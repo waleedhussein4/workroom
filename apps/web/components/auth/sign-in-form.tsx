@@ -21,12 +21,10 @@ export function SignInForm({
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [needsVerification, setNeedsVerification] = useState(false)
   const [pending, setPending] = useState(false)
 
   async function onSubmit(formData: FormData) {
     setError(null)
-    setNeedsVerification(false)
     setPending(true)
 
     const email = String(formData.get('email') ?? '')
@@ -39,10 +37,6 @@ export function SignInForm({
       // the password is wrong, which is what keeps this from being an account
       // enumeration oracle. Keep the message equally vague.
       setPending(false)
-      if (signInError.status === 403) {
-        setNeedsVerification(true)
-        return
-      }
       setError('That email and password do not match an account.')
       return
     }
@@ -102,12 +96,6 @@ export function SignInForm({
         </div>
 
         <FormError message={error} />
-
-        {needsVerification ? (
-          <p role="alert" className="text-muted-foreground bg-muted rounded-md px-3 py-2 text-sm">
-            Confirm your email address before signing in. Check your inbox for the link.
-          </p>
-        ) : null}
 
         <Button type="submit" disabled={pending} className="mt-1 w-full">
           {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}

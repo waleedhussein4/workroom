@@ -139,7 +139,6 @@ jobs:
       SYNC_INTERNAL_URL: http://127.0.0.1:1234
       NEXT_PUBLIC_SYNC_URL: ws://127.0.0.1:1234
       BETTER_AUTH_URL: http://127.0.0.1:3100
-      AUTH_REQUIRE_EMAIL_VERIFICATION: 'false'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
