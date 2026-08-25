@@ -39,6 +39,14 @@ const CARDS: Record<(typeof COLUMNS)[number], { title: string; description?: str
 
 const WELCOME_DOC = 'Welcome'
 
+/**
+ * Fills a brand new workspace with a board, three columns of cards, and a
+ * document.
+ *
+ * An empty board teaches nobody what the application does, and the first
+ * thing a new visitor sees should be something they can drag. The card
+ * titles double as the instructions.
+ */
 export async function seedWorkspace(organizationId: string, userId: string): Promise<void> {
   const db = getDb()
 

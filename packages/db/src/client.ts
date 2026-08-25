@@ -91,6 +91,10 @@ export function getDb(): Database {
   return cached
 }
 
+/**
+ * Ends the pooled connections. Tests need this or the process hangs on an
+ * open socket; the application never calls it.
+ */
 export async function closeDb(): Promise<void> {
   const globalRef = globalThis as typeof globalThis & { __workroomPool?: Pool }
   await globalRef.__workroomPool?.end()

@@ -2,13 +2,13 @@
 
 Workroom is a collaborative workspace for small teams. It combines Kanban boards for planning with live documents for writing, and everything in it syncs in real time.
 
-This document covers the product surfaces, the data model, and the design decisions that aren't obvious from reading the code. The ordering section is the important one.
+This document covers the product surfaces, the data model, and the decisions that are not obvious from reading the code. Most of the length is in the ordering section, because that is where the hard part is.
 
 ## Who it's for
 
 Small teams of builders: indie hackers, two-to-five person dev and design teams, student project groups. The kind of team that currently runs a Trello board, a shared Google Doc, and a Discord channel, and would rather have one thing.
 
-Two surfaces, because planning and thinking need different tools:
+There are two surfaces because planning and writing want different things from a tool:
 
 - **Boards.** Structured work. Columns, cards, assignees, due dates. Queryable.
 - **Docs.** Freeform writing. Rich text, checklists, code blocks.
@@ -84,7 +84,7 @@ Flat threads on cards. Author, body, timestamps. You can edit and delete your ow
 
 Two services. The Next.js app owns HTTP, auth, and all writes to Postgres. A separate Node process runs Hocuspocus and owns WebSocket connections. They share a database and two secrets.
 
-Splitting them isn't architectural purity, it's a constraint. Serverless functions cap connection lifetime, and a document sync that drops every few minutes and has to resync is not a real-time system.
+The split is forced rather than chosen. Serverless functions cap connection lifetime, and a document sync that drops every few minutes and has to resync is not a real-time system.
 
 ### Two kinds of room
 
@@ -108,7 +108,7 @@ Postgres is the only source of truth for card order.
 
 Sending neighbour ids rather than a key is what makes concurrent drops into the same gap safe. The server reads the neighbours inside the transaction, so it's working from committed state rather than whatever the client saw a moment ago. The client's optimistic key exists only so the card moves under the cursor immediately.
 
-Publishing from the server rather than the client is deliberate too. Only the server knows a write actually committed and passed authorization.
+The event is published by the server for a related reason. Only the server knows a write actually committed and passed authorization; a client could announce a move that never happened.
 
 On reconnect the client refetches the board, which covers anything missed while the socket was down.
 
@@ -159,7 +159,7 @@ The consequence is subtle. Nothing in the database is corrupt. But `ORDER BY pos
 
 ### Three layers
 
-**A total order.** Every read path sorts by `(position, id)`. SQL, the client cache, the optimistic reducer, test fixtures. Ties become harmless because every client independently computes the same sequence. This is the actual fix, and everything else is insurance on top of it.
+**A total order.** Every read path sorts by `(position, id)`: SQL, the client cache, the optimistic reducer, test fixtures. Ties become harmless, because every client works out the same sequence without having to agree with anyone. This is the fix. The other two layers are insurance on top of it.
 
 There's a test that asserts a tie converges, and a second test asserting that it _stops_ converging if the `id` tiebreak is removed. The second one exists so that whoever eventually decides `comparePositioned` looks over-complicated finds out immediately.
 
@@ -277,7 +277,7 @@ Colours are OKLCH so lightness is perceptually uniform and the dark palette can 
 - **Motion**: 120ms for hover and press, 180ms for enter and exit, 240ms for reflow caused by somebody else's edit
 - **Presence**: eight fixed hues at fixed lightness and chroma, assigned by hashing a user id, so a person keeps their colour and stays legible on both themes
 
-Remote changes animate more slowly than local ones on purpose. A card that teleports because someone else moved it reads as a glitch; a card that slides reads as an event.
+Remote changes animate more slowly than local ones. When a card you did not touch simply appears somewhere else, it reads as a glitch. Give it a quarter of a second to travel and it reads as somebody else working.
 
 dnd-kit owns movement during a drag, and nothing else animates the same nodes. Everything else is a CSS transition against the duration tokens above; there is no animation library, because a second thing transforming the elements dnd-kit is already transforming is a fight nobody wins.
 
@@ -326,7 +326,7 @@ Things that cost time if you find them late.
 
 ## Testing
 
-The ordering and permission logic lives in `packages/core` with no React, no database, and no framework imports. That's not tidiness, it's so the correctness argument runs in milliseconds with nothing to set up.
+The ordering and permission logic lives in `packages/core` with no React, no database, and no framework imports. The point of that constraint is speed: the correctness argument runs in milliseconds, on a machine with nothing installed and nothing running.
 
 **Unit.** Property-based tests over key generation: results land strictly between their bounds, random insertion sequences round-trip through a sort, bulk generation is shorter than repeated single generation. Then the concurrency simulation: two clients into one gap converge, all permutations of concurrent moves converge, rebalance preserves order exactly. Permissions are a table test over roles by actions.
 
@@ -336,9 +336,9 @@ There's also a collation guard asserting that a plain JS sort matches byte order
 
 Two transactions are opened and confirmed live before either takes a lock, then both move a card into the same gap. That asserts the `SELECT ... FOR UPDATE` on the neighbours does not deadlock, that both commit, and that no two rows end up tied on `(position, id)`.
 
-Jitter is then pinned off so two moves produce byte-identical keys, which is the case the schema deliberately leaves unconstrained, and Postgres and the client are asserted to agree on the sequence anyway.
+Jitter is then pinned off so two moves produce byte-identical keys. That is the case the schema leaves unconstrained, and the test asserts Postgres and the client agree on the sequence anyway.
 
-The third asserts positions sort by byte order. The databases used for testing are created with a locale collation on purpose, so the per-column `COLLATE "C"` is what is under test rather than an accident of how the database was made.
+The third asserts positions sort by byte order. Both test databases are created with a locale collation, so the per-column `COLLATE "C"` is what is under test rather than an accident of how the database happened to be made.
 
 An in-process Postgres such as PGlite would be the obvious way to avoid needing a server, and it is the wrong tool for the first of those: it is single-connection, so two concurrent transactions would pass for the wrong reason.
 

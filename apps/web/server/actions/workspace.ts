@@ -162,6 +162,13 @@ export async function removeMember(
   })
 }
 
+/**
+ * Changes a member's role.
+ *
+ * Ownership is not transferable this way. `canSetRole` refuses any change
+ * that would create or remove an owner, so a workspace cannot be left
+ * without one or quietly taken over by an admin.
+ */
 export async function setMemberRole(
   organizationId: string,
   memberId: string,
@@ -211,6 +218,12 @@ async function assertNotLastOwner(
   }
 }
 
+/**
+ * Removes the caller's own membership.
+ *
+ * The last owner cannot leave, because a workspace with no owner has no way
+ * to invite anybody or change anybody's role again.
+ */
 export async function leaveWorkspace(organizationId: string): Promise<ActionResult<null>> {
   return actionResult(async () => {
     const context = await requireWorkspace(organizationId)

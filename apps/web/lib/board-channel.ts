@@ -42,6 +42,13 @@ async function fetchTicket(room: string): Promise<string | null> {
   return data.token ?? null
 }
 
+/**
+ * Joins a board's realtime room and returns a teardown function.
+ *
+ * The room carries presence and the mutation events the server publishes
+ * after a write commits. No board data travels through the CRDT; this is a
+ * fan-out pipe, and Postgres remains the source of truth.
+ */
 export function connectBoardChannel({
   boardId,
   user,

@@ -37,6 +37,7 @@ export const ac = createAccessControl(statement)
 type Statement = typeof statement
 type Grants = { [K in keyof Statement]?: Statement[K][number][] }
 
+/** Splits `"card:update"` into its resource and verb. Throws on anything else. */
 export function splitAction(action: string): { resource: string; verb: string } {
   const index = action.indexOf(':')
   if (index === -1) throw new Error(`Action "${action}" is not "resource:verb"`)
@@ -76,6 +77,12 @@ export const admin = roleFor('admin')
 export const member = roleFor('member')
 export const viewer = roleFor('viewer')
 
+/**
+ * The four roles as Better Auth access-control objects, which is the shape
+ * the organization plugin wants. `PERMISSIONS` in packages/core stays the
+ * single source of truth; these are derived from it, and access.test.ts
+ * fails if the two drift apart.
+ */
 export const organizationRoles: Record<Role, ReturnType<typeof roleFor>> = {
   owner,
   admin,
