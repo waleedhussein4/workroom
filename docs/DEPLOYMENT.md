@@ -30,10 +30,9 @@ two-window convergence test.
 | Database    | Neon, `ep-still-wave-b2ngn1v0-pooler`, migrations at `0001` | live  |
 | CI          | seven jobs, green                                           | green |
 
-**Anyone can sign up.** Email confirmation follows whether a mail provider is
-configured, so with none set it is skipped rather than demanded, and sign-up
-completes. Adding a Resend key turns confirmation on by itself. Section 8 does
-that; it takes about five minutes and needs no domain.
+**Anyone can sign up.** There is no email confirmation step, so nothing about
+signing up depends on mail being deliverable. Section 8 covers the provider
+that password resets and invitations use, which is optional.
 
 **Deploys are gated on the tests.** A push to `main` runs format, lint,
 typecheck, unit tests, integration tests, build and end to end, and only ships
@@ -52,7 +51,7 @@ Section by section:
 | 5. Continuous deployment | done, gated on six checks, both services |
 | 6. GitHub sign-in        | not done. Button hidden until configured |
 | 7. Monitoring            | done, off until a DSN is set             |
-| 8. Email                 | optional, off. Confirmation off with it  |
+| 8. Email                 | resets and invitations only, optional    |
 
 ## 1. Database — done
 
@@ -274,12 +273,13 @@ on every deploy that replaces the sync machine. `lib/sentry-filter.ts` drops
 that noise, along with aborted requests and Next's own thrown control flow,
 and has tests so the policy can be checked without a Sentry client.
 
-## 8. Email — optional, not configured
+## 8. Email — optional, resets and invitations only
 
-Nothing is broken without this. Email confirmation follows whether a provider
-is configured, so with none set it is skipped and sign-up completes; the
-confirmation and invitation messages are written to the runtime log instead of
-being sent. Configuring a provider turns confirmation on by itself.
+Signing up sends no email, so nothing about reaching the application depends
+on this. What does are password resets and workspace invitations, and with no
+provider configured both are written to the runtime log instead of being sent.
+Invitations have a second route regardless, since the members page offers the
+link to copy.
 
 Resend's free tier sends 3,000 messages a month and needs no domain to start:
 messages can go out from `onboarding@resend.dev`, which is enough for a demo
@@ -293,10 +293,12 @@ RESEND_API_KEY   re_...
 EMAIL_FROM       Workroom <onboarding@resend.dev>
 ```
 
-Sending from `onboarding@resend.dev` only reaches the address that owns the
-Resend account until a domain is verified, which is fine for checking the flow
-and not fine for inviting anybody else. To send to arbitrary addresses, verify
-a domain at <https://resend.com/domains> and change `EMAIL_FROM` to use it.
+`onboarding@resend.dev` is shared between every new Resend account, so it only
+delivers to the address that owns yours. Anything else comes back **403**, and
+the failure is logged rather than shown to the person waiting. That is fine for
+checking the flow and not fine for resetting somebody else's password. To send
+to arbitrary addresses, verify a domain at <https://resend.com/domains> and
+point `EMAIL_FROM` at it.
 
 Without both variables the application still runs and still creates accounts;
 the message is written to the runtime log instead of being sent. Invitations

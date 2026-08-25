@@ -2,13 +2,14 @@ import 'server-only'
 import { escapeHtml } from '@/lib/escape-html'
 
 /**
- * Outbound email.
+ * Outbound email: password resets and workspace invitations.
  *
- * Falls back to logging when no provider is configured, so verification and
- * invitation flows can be exercised locally without signing up for anything.
- * That fallback is a development convenience and nothing more: in production
- * it means the link exists only in a runtime log, and nobody can finish
- * signing up.
+ * Signing up sends nothing, so email is never on the path between a visitor
+ * and the application. That is what makes the logging fallback below a
+ * reasonable production posture rather than a broken one: with no provider
+ * configured the two links land in a runtime log, and everything else still
+ * works. An invitation has a second route anyway, since the members page
+ * offers the link to copy.
  */
 
 interface Email {

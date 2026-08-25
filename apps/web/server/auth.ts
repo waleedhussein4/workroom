@@ -4,16 +4,11 @@ import { organization } from 'better-auth/plugins'
 import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import { getDb, schema } from '@workroom/db'
 import { ac, organizationRoles } from './access'
-import { emailConfigured, sendEmail } from './email'
-import { emailVerificationRequired, githubCredentials, optional } from './env'
+import { sendEmail } from './email'
+import { githubCredentials, optional } from './env'
 
 const appUrl = optional('BETTER_AUTH_URL') ?? 'http://localhost:3000'
 const github = githubCredentials()
-
-const requireEmailVerification = emailVerificationRequired(
-  optional('AUTH_REQUIRE_EMAIL_VERIFICATION'),
-  emailConfigured(),
-)
 
 export const auth = betterAuth({
   appName: 'Workroom',
@@ -25,28 +20,31 @@ export const auth = betterAuth({
     schema,
   }),
 
+  /**
+   * There is no email confirmation step, deliberately.
+   *
+   * Confirming an address proves the person signing up can read that inbox.
+   * Nothing here acts on that: an account reaches only the workspaces it
+   * creates or is invited to, and an invitation is addressed to a mailbox
+   * somebody already controls. The check would buy no access control, and
+   * would cost every visitor a round trip through their inbox before they can
+   * see anything.
+   *
+   * It also cannot be made to work on a shared sender. A provider's shared
+   * from-address only delivers to the account that owns it, so requiring
+   * confirmation means every other address gets an account it can never sign
+   * in to, which fails worse than not asking.
+   *
+   * Password resets and invitations still send mail. Both are addressed to
+   * somebody who is already reachable.
+   */
   emailAndPassword: {
     enabled: true,
-    // The email provider falls back to logging the link to the server
-    // console, so this works locally with nothing configured.
-    requireEmailVerification,
     async sendResetPassword({ user, url }) {
       await sendEmail({
         to: user.email,
         subject: 'Reset your Workroom password',
         text: `Someone asked to reset the password for this account.\n\n${url}\n\nIf that was not you, you can ignore this.`,
-      })
-    },
-  },
-
-  emailVerification: {
-    sendOnSignUp: requireEmailVerification,
-    autoSignInAfterVerification: true,
-    async sendVerificationEmail({ user, url }) {
-      await sendEmail({
-        to: user.email,
-        subject: 'Confirm your email for Workroom',
-        text: `Confirm your email address to finish setting up your account.\n\n${url}`,
       })
     },
   },

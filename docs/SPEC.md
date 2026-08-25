@@ -28,6 +28,8 @@ The top-level container. A user can belong to several. Members have one of four 
 
 Every mutation checks the caller's role server-side. Hiding a button in the UI is a convenience, not a control.
 
+There is no email confirmation step. Confirming an address proves the person signing up can read that inbox, and nothing here acts on that: an account reaches only the workspaces it creates or is invited to, and an invitation is addressed to a mailbox somebody already controls. The check would buy no access control while costing every visitor a round trip through their inbox. It also cannot be made to work on a shared sending address, which only delivers to the account that owns it, so requiring confirmation would hand every other address an account it could never sign in to. Password resets and invitations still send mail, because both are addressed to somebody already reachable.
+
 ### Boards
 
 Board, columns, cards. Cards carry a title, description, assignee, labels, due date, and a comment thread.

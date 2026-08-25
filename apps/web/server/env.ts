@@ -25,24 +25,3 @@ export function githubCredentials(): { clientId: string; clientSecret: string } 
   if (!clientId || !clientSecret) return undefined
   return { clientId, clientSecret }
 }
-
-/**
- * Whether new accounts have to confirm their email address.
- *
- * Requiring confirmation with no mail provider configured is not a safe
- * default, it is a locked door: the link goes to a server log and nobody
- * outside that log can finish signing up. So the requirement follows the
- * ability to send, and a deployment gains confirmation the moment it gains a
- * provider.
- *
- * The override wins in both directions. The end-to-end suite sets it to
- * "false", because the alternative is scraping a link out of server logs in
- * every sign-up test.
- */
-export function emailVerificationRequired(
-  override: string | undefined,
-  canSendEmail: boolean,
-): boolean {
-  if (override === undefined) return canSendEmail
-  return override !== 'false'
-}

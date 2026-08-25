@@ -68,9 +68,6 @@ export default defineConfig({
             DATABASE_URL: process.env.DATABASE_URL ?? '',
             BETTER_AUTH_SECRET:
               process.env.BETTER_AUTH_SECRET ?? 'e2e-only-secret-long-enough-to-satisfy-checks',
-            // Confirming an address means scraping a link out of server logs
-            // in every sign-up test. Turned off here and nowhere else.
-            AUTH_REQUIRE_EMAIL_VERIFICATION: 'false',
             BETTER_AUTH_URL: baseURL,
             REALTIME_JWT_SECRET: process.env.REALTIME_JWT_SECRET ?? 'e2e-realtime-secret',
             SYNC_INTERNAL_SECRET: process.env.SYNC_INTERNAL_SECRET ?? 'e2e-internal-secret',
